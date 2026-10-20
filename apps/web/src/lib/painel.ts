@@ -13,7 +13,7 @@ import {
 } from '@cobra/core';
 import { Repositorio, type CarteiraCompleta, type Configuracao, type OperacaoRow } from '@cobra/db';
 import { fonteDemo, MODO_DEMO } from './demo';
-import { supabaseServidor } from './supabase/server';
+import { dbPainel } from './supabase/painel';
 
 export type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -79,7 +79,7 @@ export class Fmt {
 export type Fonte = Pick<Repositorio, 'configuracao' | 'hoje' | 'regras' | 'eventos' | 'carregarCarteira'>;
 
 export async function fonte(): Promise<Fonte> {
-  return MODO_DEMO ? fonteDemo : new Repositorio(await supabaseServidor());
+  return MODO_DEMO ? fonteDemo : new Repositorio(await dbPainel());
 }
 
 export async function carregarPainel(sp: SearchParams = {}) {

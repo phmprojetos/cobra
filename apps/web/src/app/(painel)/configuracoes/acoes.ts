@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { fonteDemo, MODO_DEMO } from '@/lib/demo';
-import { supabaseServidor } from '@/lib/supabase/server';
+import { dbPainel } from '@/lib/supabase/painel';
 
 export interface Resultado {
   ok: boolean;
@@ -50,7 +50,7 @@ export async function salvarGeral(_: Resultado | null, form: FormData): Promise<
     revalidatePath('/', 'layout');
     return { ok: true, mensagem: 'Configurações salvas (modo demonstração).' };
   }
-  const db = await supabaseServidor();
+  const db = await dbPainel();
   const { error } = await db.from('configuracoes').upsert([
     { chave: 'moeda', valor: moeda },
     { chave: 'locale', valor: locale },
@@ -91,7 +91,7 @@ export async function salvarRegra(_: Resultado | null, form: FormData): Promise<
       revalidatePath('/configuracoes');
       return { ok: true, mensagem: 'Regra salva (modo demonstração).' };
     }
-    const db = await supabaseServidor();
+    const db = await dbPainel();
     const { error } = id
       ? await db.from('regras_notificacao').update(dados).eq('id', id)
       : await db.from('regras_notificacao').insert(dados);

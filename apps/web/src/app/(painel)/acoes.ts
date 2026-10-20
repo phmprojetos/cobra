@@ -5,10 +5,11 @@ import { ErroBanco, executarPagamento, planejarPagamento, Repositorio } from '@c
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { fonteDemo, MODO_DEMO } from '@/lib/demo';
+import { dbPainel, SEM_LOGIN } from '@/lib/supabase/painel';
 import { supabaseServidor } from '@/lib/supabase/server';
 
 export async function sair() {
-  if (MODO_DEMO) redirect('/');
+  if (MODO_DEMO || SEM_LOGIN) redirect('/');
   const supabase = await supabaseServidor();
   await supabase.auth.signOut();
   redirect('/login');
@@ -32,7 +33,7 @@ export async function registrarPagamento(_: ResultadoAcao | null, form: FormData
     return { ok: true, mensagem: 'Pagamento registrado (modo demonstração, só em memória).' };
   }
   try {
-    const repo = new Repositorio(await supabaseServidor());
+    const repo = new Repositorio(await dbPainel());
     const plano = await planejarPagamento(repo, { parcelaId, valor, ...(data ? { data } : {}), forma: String(form.get('forma') ?? '') || null });
     if (plano.excedente > 0) return { ok: false, mensagem: 'O valor é maior que o saldo em aberto deste empréstimo.' };
     await executarPagamento(repo, plano, { origem: 'web' });

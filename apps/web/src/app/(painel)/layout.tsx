@@ -4,6 +4,7 @@ import { Navegacao } from '@/components/navegacao';
 import { AlternarTema } from '@/components/tema';
 import { Button } from '@/components/ui/button';
 import { MODO_DEMO } from '@/lib/demo';
+import { SEM_LOGIN } from '@/lib/supabase/painel';
 import { sair } from './acoes';
 
 export default function LayoutPainel({ children }: LayoutProps<'/'>) {
@@ -14,17 +15,24 @@ export default function LayoutPainel({ children }: LayoutProps<'/'>) {
           <span className="font-semibold tracking-tight">Cobra</span>
           <div className="flex items-center">
             <AlternarTema />
-            <form action={sair}>
-              <Button variant="ghost" size="icon" aria-label="Sair" type="submit">
-                <LogOut />
-              </Button>
-            </form>
+            {!SEM_LOGIN && !MODO_DEMO && (
+              <form action={sair}>
+                <Button variant="ghost" size="icon" aria-label="Sair" type="submit">
+                  <LogOut />
+                </Button>
+              </form>
+            )}
           </div>
         </div>
         <Suspense>
           <Navegacao />
         </Suspense>
       </header>
+      {SEM_LOGIN && !MODO_DEMO && (
+        <div role="note" className="bg-muted text-muted-foreground mx-4 mt-3 rounded-lg px-3 py-2 text-xs">
+          Painel sem login (somente neste computador). Para exigir login, remova PAINEL_SEM_LOGIN do .env.
+        </div>
+      )}
       {MODO_DEMO && (
         <div role="note" className="bg-muted text-muted-foreground mx-4 mt-3 rounded-lg px-3 py-2 text-xs">
           Modo demonstração: dados fictícios em memória. Pagamentos e ajustes feitos aqui somem ao reiniciar o servidor.
