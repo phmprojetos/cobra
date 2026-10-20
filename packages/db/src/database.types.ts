@@ -218,7 +218,7 @@ isOneToOne: false
                            }
           }
           Enums: {
-            "origem_lancamento": "telegram"|"web","periodicidade": "semanal"|"quinzenal"|"mensal","status_operacao": "ativa"|"quitada"|"atrasada"|"renegociada"|"perdida"|"cancelada","status_parcela": "aberta"|"parcial"|"paga"|"atrasada"|"cancelada","tipo_documento": "cpf"|"cnpj"|"rg"|"outro","tipo_operacao": "unica"|"parcelada","tipo_regra_notificacao": "lembrete_antes"|"no_dia"|"atraso"|"resumo_diario"|"resumo_semanal"|"lista_atrasados"
+            "origem_lancamento": "telegram"|"web","periodicidade": "semanal"|"quinzenal"|"mensal","status_operacao": "ativa"|"quitada"|"atrasada"|"renegociada"|"perdida"|"cancelada","status_parcela": "aberta"|"parcial"|"paga"|"atrasada"|"cancelada","tipo_documento": "cpf"|"cnpj"|"rg"|"outro","tipo_operacao": "unica"|"parcelada","tipo_regra_notificacao": "lembrete_antes"|"no_dia"|"atraso"|"resumo_diario"|"resumo_semanal"|"lista_atrasados"|"lista_amanha"
           }
           CompositeTypes: {
             [_ in never]: never
@@ -334,7 +334,7 @@ export type CompositeTypes<
 export const Constants = {
   "public": {
           Enums: {
-            "origem_lancamento": ["telegram", "web"],"periodicidade": ["semanal", "quinzenal", "mensal"],"status_operacao": ["ativa", "quitada", "atrasada", "renegociada", "perdida", "cancelada"],"status_parcela": ["aberta", "parcial", "paga", "atrasada", "cancelada"],"tipo_documento": ["cpf", "cnpj", "rg", "outro"],"tipo_operacao": ["unica", "parcelada"],"tipo_regra_notificacao": ["lembrete_antes", "no_dia", "atraso", "resumo_diario", "resumo_semanal", "lista_atrasados"]
+            "origem_lancamento": ["telegram", "web"],"periodicidade": ["semanal", "quinzenal", "mensal"],"status_operacao": ["ativa", "quitada", "atrasada", "renegociada", "perdida", "cancelada"],"status_parcela": ["aberta", "parcial", "paga", "atrasada", "cancelada"],"tipo_documento": ["cpf", "cnpj", "rg", "outro"],"tipo_operacao": ["unica", "parcelada"],"tipo_regra_notificacao": ["lembrete_antes", "no_dia", "atraso", "resumo_diario", "resumo_semanal", "lista_atrasados", "lista_amanha"]
           }
         }
 } as const

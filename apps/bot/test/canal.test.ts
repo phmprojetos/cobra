@@ -4,7 +4,7 @@ import type { Bot } from 'grammy';
 import { describe, expect, it, vi } from 'vitest';
 import { Aplicacao } from '../src/aplicacao';
 import { criarBot, opcoesEnvio } from '../src/bot';
-import { linkParcela, mensagemDevedoresDoDia, mensagemGrupoParcelas, mensagemNovoEmprestimo } from '../src/canal';
+import { linkParcela, mensagemDevedoresDoDia, mensagemGrupoParcelas, mensagemNovoEmprestimo, mensagemVencemAmanha } from '../src/canal';
 import { Formatador } from '../src/formatacao';
 
 const hoje = '2026-10-20';
@@ -81,6 +81,22 @@ describe('mensagens do canal', () => {
   it('só atrasados ou só de hoje', () => {
     expect(mensagemDevedoresDoDia(carteira([par('p1', 'o1', '2026-10-15')]), hoje, '09:00', f, 'b').texto).not.toContain('Vencem hoje');
     expect(mensagemDevedoresDoDia(carteira([par('p2', 'o2', hoje)]), hoje, '09:00', f, 'b').texto).not.toContain('Atrasados');
+  });
+
+  it('vencem amanhã: só quem vence amanhã, maior valor primeiro, com documento', () => {
+    const c = carteira([par('p1', 'o1', '2026-10-21'), par('p2', 'o2', '2026-10-21'), par('p3', 'o2', '2026-10-15')]);
+    const m = mensagemVencemAmanha(c, hoje, '20:00', f, 'bot');
+    expect(m.texto).toContain('📆 <b>Vencem amanhã · 21/10 (qua)</b>');
+    expect(m.texto).toContain('2 contrato(s) · total <b>R$ 2.600,00</b> · <i>atualizado às 20:00</i>');
+    expect(m.texto).toContain('CPF <code>112.198.194-17</code>');
+    expect(m.texto).not.toContain('atraso');
+    expect(m.teclado).toHaveLength(2);
+  });
+
+  it('ninguém vence amanhã', () => {
+    const m = mensagemVencemAmanha(carteira([par('p3', 'o2', '2026-10-15')]), hoje, '20:00', f, 'bot');
+    expect(m.texto).toBe('📆 <b>Vencem amanhã · 21/10 (qua)</b>\n✅ Ninguém vence amanhã.\n<i>atualizado às 20:00</i>');
+    expect(m.teclado).toBeUndefined();
   });
 
   it('novo empréstimo', () => {

@@ -35,7 +35,7 @@ export type Alerta =
   | { tipo: 'parcela'; regra: RegraNotificacao; parcelaId: string; dataReferencia: DataISO }
   | {
       /** Mensagens diárias/semanais da carteira (não ligadas a uma parcela). */
-      tipo: 'resumo_diario' | 'resumo_semanal' | 'lista_atrasados';
+      tipo: 'resumo_diario' | 'resumo_semanal' | 'lista_atrasados' | 'lista_amanha';
       regra: RegraNotificacao;
       parcelaId: null;
       dataReferencia: DataISO;
@@ -113,7 +113,7 @@ export function avaliarNotificacoes(e: EntradaAvaliacao): Alerta[] {
       const disparo = instanteDisparo(dataBase, regra.horario, e.silencio, e.timezone).getTime();
       if (agoraMs < disparo || agoraMs - disparo > JANELA_MAXIMA_MS) continue;
 
-      if (regra.tipo === 'resumo_diario' || regra.tipo === 'resumo_semanal' || regra.tipo === 'lista_atrasados') {
+      if (regra.tipo === 'resumo_diario' || regra.tipo === 'resumo_semanal' || regra.tipo === 'lista_atrasados' || regra.tipo === 'lista_amanha') {
         if (regra.tipo === 'resumo_semanal' && diaSemana(dataBase) !== (regra.diaSemana ?? 1)) {
           continue;
         }

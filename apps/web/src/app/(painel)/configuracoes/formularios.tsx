@@ -75,6 +75,7 @@ const ROTULOS: Record<string, string> = {
   resumo_diario: 'Resumo diário',
   resumo_semanal: 'Resumo semanal',
   lista_atrasados: 'Devedores do dia',
+  lista_amanha: 'Vencem amanhã',
 };
 const DIAS = ['', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado', 'domingo'];
 
@@ -136,7 +137,7 @@ export function FormRegra({ regra, clientes }: { regra: RegraForm; clientes: { i
           </select>
         </label>
       )}
-      {!regra.tipo.startsWith('resumo') && regra.tipo !== 'lista_atrasados' && clientes.length > 0 && (
+      {!regra.tipo.startsWith('resumo') && !regra.tipo.startsWith('lista_') && clientes.length > 0 && (
         <label className="space-y-1">
           <span className="text-muted-foreground block text-xs">Silenciar clientes</span>
           <select name="silenciar" multiple defaultValue={regra.silenciar_clientes} className="bg-background h-16 w-44 rounded-md border px-1 text-xs">

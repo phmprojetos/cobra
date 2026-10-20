@@ -9,7 +9,7 @@ import {
   type ParcelaParaAlerta,
 } from '@cobra/core';
 import { atualizarStatus, paraRegra, type CarteiraCompleta, type Repositorio } from '@cobra/db';
-import { mensagemDevedoresDoDia, mensagemGrupoParcelas, type TipoGrupo } from './canal';
+import { mensagemDevedoresDoDia, mensagemGrupoParcelas, mensagemVencemAmanha, type TipoGrupo } from './canal';
 import { textoResumoDiario, textoResumoSemanal } from './consultas';
 import { escapar, Formatador, type Botao, type Resposta } from './formatacao';
 import type { Log } from './aplicacao';
@@ -135,8 +135,10 @@ export async function executarJobNotificacoes(
         ? { texto: textoResumoDiario(carteira, a.dataReferencia, f) }
         : a.tipo === 'resumo_semanal'
           ? { texto: textoResumoSemanal(carteira, a.dataReferencia, f) }
-          : // Devedores do dia: status do momento do envio; sem devedores, diz isso.
-            mensagemDevedoresDoDia(carteira, a.dataReferencia, horaLocal(agora, config.timezone), f, botUsername);
+          : a.tipo === 'lista_amanha'
+            ? mensagemVencemAmanha(carteira, a.dataReferencia, horaLocal(agora, config.timezone), f, botUsername)
+            : // Devedores do dia: status do momento do envio; sem devedores, diz isso.
+              mensagemDevedoresDoDia(carteira, a.dataReferencia, horaLocal(agora, config.timezone), f, botUsername);
     envios.push({ resposta, chaves: [chave(a)] });
   }
 

@@ -1,5 +1,6 @@
-import { formatarDocumento, listarAtrasados, saldoParcela, type DataISO } from '@cobra/core';
+import { formatarDocumento, listarAtrasados, mascararTelefone, saldoParcela, somarDias, type DataISO } from '@cobra/core';
 import { paraParcela, type CarteiraCompleta, type PlanoOperacao } from '@cobra/db';
+import { documentoRotulado } from './consultas';
 import { escapar, type Botao, type Formatador, type Resposta } from './formatacao';
 
 /**
@@ -22,6 +23,8 @@ function info(c: CarteiraCompleta, parcelaId: string) {
     p,
     nome: cliente?.nome ?? '?',
     doc: cliente ? formatarDocumento(cliente.documento_tipo, cliente.documento) : '',
+    docRotulado: documentoRotulado(cliente?.documento_tipo ?? null, cliente?.documento ?? null),
+    telefone: cliente?.telefone ? mascararTelefone(cliente.telefone) : null,
     rotulo: total > 1 ? ` · parcela ${p.numero}/${total}` : '',
     saldo: saldoParcela(paraParcela(p)).total,
   };
@@ -106,6 +109,33 @@ export function mensagemDevedoresDoDia(c: CarteiraCompleta, hoje: DataISO, hora:
       ],
       botUsername,
     ),
+  };
+}
+
+/**
+ * Vencem amanhã (enviada à noite, com o status do momento): planejar as cobranças do dia seguinte.
+ * Atrasados ficam de fora: eles já estão nos Devedores do dia.
+ */
+export function mensagemVencemAmanha(c: CarteiraCompleta, hoje: DataISO, hora: string, f: Formatador, botUsername: string): Resposta {
+  const amanha = somarDias(hoje, 1);
+  const titulo = `📆 <b>Vencem amanhã · ${f.data(amanha, amanha.slice(0, 4))}</b>`;
+  const abertas = new Set(c.operacoes.filter((o) => ['ativa', 'atrasada', 'renegociada'].includes(o.status)).map((o) => o.id));
+  const itens = c.parcelas
+    .filter((p) => abertas.has(p.operacao_id) && p.vencimento === amanha)
+    .map((p) => info(c, p.id)!)
+    .filter((i) => i.saldo > 0)
+    .sort((a, b) => b.saldo - a.saldo);
+  if (itens.length === 0) return { texto: `${titulo}
+✅ Ninguém vence amanhã.
+<i>atualizado às ${hora}</i>` };
+  const total = itens.reduce((a, i) => a + i.saldo, 0);
+  const linhas = [titulo, `${itens.length} contrato(s) · total <b>${f.dinheiro(total)}</b> · <i>atualizado às ${hora}</i>`, ''];
+  for (const i of itens) {
+    linhas.push(`• <b>${escapar(i.nome)}</b>${i.rotulo} — ${f.dinheiro(i.saldo)}\n   ${i.docRotulado}${i.telefone ? ` · 📞 ${i.telefone}` : ''}`);
+  }
+  return {
+    texto: linhas.join('\n'),
+    teclado: botoesLinks(itens.map((i) => ({ nome: i.nome, valor: f.dinheiro(i.saldo), id: i.p.id })), botUsername),
   };
 }
 
