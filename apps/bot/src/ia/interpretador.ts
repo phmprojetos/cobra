@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { diaSemana, inicioSemana, somarDias, type DataISO } from '@cobra/core';
-import { FERRAMENTAS, SCHEMAS, type Intencao, type NomeFerramenta } from './ferramentas';
+import { FERRAMENTAS, SCHEMAS, type IntencaoParcial, type NomeFerramenta } from './ferramentas';
 
 const DIAS = ['', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado', 'domingo'];
 
@@ -13,30 +13,39 @@ O usuário é quem empresta: ele empresta um valor e recebe um valor maior depoi
 
 Responda SEMPRE chamando exatamente uma ferramenta. Não escreva texto fora da ferramenta.
 
-Regras:
-- Valores: "2000", "2 mil", "2k", "R$ 2.000,00" → 2000. Use reais (não centavos).
-- Datas: devolva sempre YYYY-MM-DD, resolvendo expressões relativas a partir da data de hoje informada.
-  "dia 15" = próximo dia 15 a partir de hoje (inclusive). "15/12" = 15 de dezembro (deste ano, ou do próximo se já passou).
+Extração:
+- Preencha SOMENTE o que a mensagem (ou o rascunho) disser. O que não foi dito vai como null: o sistema pergunta depois.
+  Nunca invente nem deduza valores, datas ou nomes que não estejam no texto.
+- Se a intenção estiver clara (empréstimo, pagamento, prorrogação, cadastro, consulta), use a ferramenta dela mesmo com campos null.
+  pedir_esclarecimento é só para saudações, assuntos fora de empréstimos ou frases sem sentido.
+- Valores: "2000", "2 mil", "2k", "R$ 2.000,00" → 2000 (em reais).
+- valor_emprestado = o que saiu do bolso do usuário ("emprestei 2000", "pegou 500").
+  valor_total_receber = o que volta ("volta 2400", "paga 600", "para receber 1000", "devolve 1200"). "4x de 150" → 600.
+  Um valor sozinho sem indicar qual é ("1000 pro João") → valor_emprestado.
+- Datas: sempre YYYY-MM-DD, resolvendo expressões relativas a partir de hoje.
+  "dia 15" = próximo dia 15 (inclusive hoje). "15/12" = 15 de dezembro (deste ano, ou do próximo se já passou).
   "sexta" = próxima sexta-feira; se hoje é sexta, a de hoje. "daqui 20 dias" = hoje + 20. "amanhã" = hoje + 1.
-- "volta 2400", "paga 600", "devolve 600" = valor_total_receber.
 - "em 4x semanais começando sexta" → numero_parcelas 4, periodicidade semanal, primeiro_vencimento = próxima sexta.
-- "4x de 150" → valor_total_receber 600.
-- Parcela única: numero_parcelas 1, periodicidade "mensal".
-- Clientes: use o nome exatamente como na lista quando o usuário usar nome, primeiro nome ou apelido de alguém da lista.
-  Se houver mais de um candidato, devolva o que o usuário digitou (o sistema vai perguntar). Se não estiver na lista, devolva como digitado.
-- "pagou", "acertou", "mandou" = registrar_pagamento.
-- "joga o vencimento", "adia", "prorroga", "empurra" = prorrogar. "com mais 100" = acrescimo 100.
-- Perguntas ("quanto entra", "quem tá atrasado", "saldo da Ana", "como tá a carteira") = consultar.
-  "essa semana" = semana atual (segunda a domingo) informada no contexto; "hoje" = data_inicio e data_fim iguais a hoje; "esse mês" = do dia 1 ao último dia do mês.
-- Se faltar informação essencial (quem, quanto, quando) ou a mensagem não for sobre empréstimos, use pedir_esclarecimento. Nunca invente valores.
-- Quando houver um RASCUNHO no contexto, a mensagem é uma correção dele: devolva a mesma ferramenta com os campos corrigidos e os demais mantidos.`;
+  Sem menção a parcelas → numero_parcelas null e periodicidade null (o sistema assume parcela única).
+- Cliente: use o nome exatamente como na lista quando o usuário usar nome, primeiro nome ou apelido de alguém da lista.
+  Se houver mais de um candidato ou não estiver na lista, devolva como digitado. Número de CPF/CNPJ/documento vai em "documento".
+- "cadastrar", "cadastro", "novo cliente" = criar_cliente.
+- "pagou", "acertou", "mandou" = registrar_pagamento. "joga o vencimento", "adia", "prorroga" = prorrogar; "com mais 100" = acrescimo 100.
+- Perguntas ("quanto entra", "quem tá atrasado", "saldo da Ana") = consultar.
+  "essa semana" = semana atual informada no contexto; "hoje" = início e fim hoje; "esse mês" = do dia 1 ao último dia do mês.
+
+RASCUNHO: quando o contexto trouxer um rascunho, a conversa está no meio de um lançamento. Se a mensagem responde ou corrige
+o rascunho, devolva A MESMA ferramenta com os campos novos/corrigidos (pode repetir os já conhecidos ou deixá-los null).
+Se a mensagem claramente muda de assunto (outra pergunta ou outro lançamento), use a ferramenta do novo assunto.`;
 
 export interface ContextoInterpretacao {
   hoje: DataISO;
   timezone: string;
   clientes: readonly { nome: string; apelidos: readonly string[] }[];
-  /** Intenção pendente sendo corrigida (fluxo ✏️ Editar). */
-  rascunho?: Intencao | null;
+  /** Lançamento em andamento (incompleto ou em edição ✏️). */
+  rascunho?: IntencaoParcial | null;
+  /** Campo que o bot acabou de perguntar, se houver. */
+  aguardando?: string | null;
 }
 
 export function montarContexto(ctx: ContextoInterpretacao): string {
@@ -51,11 +60,12 @@ export function montarContexto(ctx: ContextoInterpretacao): string {
   ];
   if (ctx.rascunho) {
     linhas.push(`RASCUNHO (${ctx.rascunho.tipo}): ${JSON.stringify(ctx.rascunho.dados)}`);
+    if (ctx.aguardando) linhas.push(`O sistema acabou de perguntar: ${ctx.aguardando}`);
   }
   return linhas.join('\n');
 }
 
-export type ResultadoInterpretacao = Intencao | { tipo: 'falha'; motivo: string };
+export type ResultadoInterpretacao = IntencaoParcial | { tipo: 'falha'; motivo: string };
 
 export interface Interpretador {
   interpretar(texto: string, ctx: ContextoInterpretacao): Promise<ResultadoInterpretacao>;
@@ -72,7 +82,7 @@ export function extrairIntencao(resposta: Pick<Anthropic.Message, 'content' | 's
   if (!schema) return { tipo: 'falha', motivo: `ferramenta_desconhecida:${bloco.name}` };
   const r = schema.safeParse(bloco.input);
   if (!r.success) return { tipo: 'falha', motivo: `entrada_invalida:${r.error.issues[0]?.message ?? ''}` };
-  return { tipo: nome, dados: r.data } as Intencao;
+  return { tipo: nome, dados: r.data } as IntencaoParcial;
 }
 
 export class InterpretadorClaude implements Interpretador {
@@ -101,7 +111,7 @@ export class InterpretadorClaude implements Interpretador {
       return extrairIntencao(resposta);
     } catch (e) {
       if (e instanceof Anthropic.RateLimitError) return { tipo: 'falha', motivo: 'limite_de_uso' };
-      if (e instanceof Anthropic.APIError) return { tipo: 'falha', motivo: `api_${e.status ?? 'erro'}` };
+      if (e instanceof Anthropic.APIError) return { tipo: 'falha', motivo: `api_${e.status ?? 'erro'}: ${e.message.slice(0, 300)}` };
       return { tipo: 'falha', motivo: 'erro_rede' };
     }
   }

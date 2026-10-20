@@ -1,9 +1,9 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import { describe, expect, it } from 'vitest';
-import { parseNovo, parsePagar } from '../src/atalhos';
+import { intencaoRapida, parseNovo, parsePagar } from '../src/atalhos';
 import { FERRAMENTAS } from '../src/ia/ferramentas';
 import { extrairIntencao, montarContexto, PROMPT_SISTEMA } from '../src/ia/interpretador';
-import { CLIENTES_FIXO, HOJE_FIXO, MENSAGENS } from './fixtures';
+import { CLIENTES_FIXO, HOJE_FIXO, MENSAGENS, PARCIAIS } from './fixtures';
 
 /** Resposta gravada do modelo: um bloco tool_use com a intenção esperada. */
 function respostaGravada(nome: string, input: unknown, stop: Anthropic.Message['stop_reason'] = 'tool_use') {
@@ -14,7 +14,7 @@ function respostaGravada(nome: string, input: unknown, stop: Anthropic.Message['
 }
 
 describe('extrairIntencao (respostas gravadas das frases de exemplo)', () => {
-  it.each(MENSAGENS)('$texto', ({ esperado }) => {
+  it.each([...MENSAGENS, ...PARCIAIS])('$texto', ({ esperado }) => {
     expect(extrairIntencao(respostaGravada(esperado.tipo, esperado.dados))).toEqual(esperado);
   });
 
@@ -23,7 +23,7 @@ describe('extrairIntencao (respostas gravadas das frases de exemplo)', () => {
     expect(r).toEqual({ tipo: 'falha', motivo: 'sem_ferramenta' });
   });
   it('falha com entrada inválida (não chuta)', () => {
-    const r = extrairIntencao(respostaGravada('registrar_pagamento', { cliente: 'Carlos', valor: -5, data: 'ontem', forma: null }));
+    const r = extrairIntencao(respostaGravada('registrar_pagamento', { cliente: 'Carlos', valor: -5, data: null, forma: null }));
     expect(r.tipo).toBe('falha');
   });
   it('falha com ferramenta desconhecida, recusa ou truncamento', () => {
@@ -49,20 +49,45 @@ describe('prompt e contexto', () => {
   it('prompt de sistema é estável (cacheável): sem datas', () => {
     expect(PROMPT_SISTEMA).not.toMatch(/\d{4}-\d{2}-\d{2}/);
   });
-  it('todas as tools são strict e fecham additionalProperties', () => {
+  it('tools fecham additionalProperties; strict cabe no limite de 16 parâmetros anuláveis', () => {
+    let unioes = 0;
     for (const t of FERRAMENTAS) {
-      expect(t.strict).toBe(true);
+      if (t.strict) {
+        unioes += Object.values(t.input_schema.properties).filter(
+          (p) => Array.isArray((p as { type?: unknown }).type) || 'anyOf' in (p as object),
+        ).length;
+      }
       expect(t.input_schema.additionalProperties).toBe(false);
       expect([...t.input_schema.required].sort()).toEqual(Object.keys(t.input_schema.properties).sort());
     }
+    expect(unioes).toBeLessThanOrEqual(16);
   });
 });
 
 describe('atalhos sem IA', () => {
+  it('palavras-chave abrem rascunho', () => {
+    expect(intencaoRapida('cadastro')).toEqual(PARCIAIS[1]!.esperado);
+    expect(intencaoRapida('Novo cliente!')?.tipo).toBe('criar_cliente');
+    expect(intencaoRapida('novo empréstimo')?.tipo).toBe('criar_operacao');
+    expect(intencaoRapida('Pagamento')?.tipo).toBe('registrar_pagamento');
+    expect(intencaoRapida('cadastro do Pedro 123')).toBeNull();
+    expect(intencaoRapida('olá')).toBeNull();
+  });
+
   it('/novo parcela única', () => {
-    expect(parseNovo('Carlos 2000 2400 15/12', HOJE_FIXO)).toEqual(MENSAGENS[0]!.esperado.tipo === 'criar_operacao' && {
+    expect(parseNovo('Carlos 2000 2400 15/12', HOJE_FIXO)).toEqual({
       tipo: 'criar_operacao',
-      dados: { ...MENSAGENS[0]!.esperado.dados, cliente: 'Carlos' },
+      dados: {
+        cliente: 'Carlos',
+        documento: null,
+        valor_emprestado: 2000,
+        valor_total_receber: 2400,
+        numero_parcelas: 1,
+        periodicidade: 'mensal',
+        primeiro_vencimento: '2026-12-15',
+        data_emprestimo: HOJE_FIXO,
+        observacoes: null,
+      },
     });
   });
   it('/novo parcelado com nome composto', () => {

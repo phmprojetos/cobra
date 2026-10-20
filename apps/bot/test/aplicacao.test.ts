@@ -67,6 +67,7 @@ describe.skipIf(!disponivel)('fluxos do bot (Supabase)', () => {
     tipo: 'criar_operacao',
     dados: {
       cliente: `Teste${suf}`,
+      documento: null,
       valor_emprestado: 2000,
       valor_total_receber: total,
       numero_parcelas: 1,

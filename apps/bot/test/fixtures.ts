@@ -1,4 +1,4 @@
-import type { Intencao } from '../src/ia/ferramentas';
+import type { IntencaoParcial } from '../src/ia/ferramentas';
 
 /** Data fixa das fixtures do parser: terça-feira. */
 export const HOJE_FIXO = '2026-10-20';
@@ -12,23 +12,25 @@ export const CLIENTES_FIXO = [
 ];
 
 /**
- * As frases de exemplo do documento do produto e a intenção esperada.
+ * As frases de exemplo do documento do produto e o que o modelo deve extrair
+ * (campos não ditos ficam null; o bot completa com padrões ou pergunta).
  * Usadas (a) como respostas gravadas nos testes determinísticos e
  * (b) como gabarito no teste contra a API real (`pnpm test:llm`).
  */
-export const MENSAGENS: { texto: string; esperado: Intencao }[] = [
+export const MENSAGENS: { texto: string; esperado: IntencaoParcial }[] = [
   {
     texto: 'emprestei 2000 pro Carlos, volta 2400 dia 15/12',
     esperado: {
       tipo: 'criar_operacao',
       dados: {
         cliente: 'Carlos Souza',
+        documento: null,
         valor_emprestado: 2000,
         valor_total_receber: 2400,
-        numero_parcelas: 1,
-        periodicidade: 'mensal',
+        numero_parcelas: null,
+        periodicidade: null,
         primeiro_vencimento: '2026-12-15',
-        data_emprestimo: HOJE_FIXO,
+        data_emprestimo: null,
         observacoes: null,
       },
     },
@@ -39,19 +41,20 @@ export const MENSAGENS: { texto: string; esperado: Intencao }[] = [
       tipo: 'criar_operacao',
       dados: {
         cliente: 'Ana Paula',
+        documento: null,
         valor_emprestado: 500,
         valor_total_receber: 600,
         numero_parcelas: 4,
         periodicidade: 'semanal',
         primeiro_vencimento: '2026-10-23',
-        data_emprestimo: HOJE_FIXO,
+        data_emprestimo: null,
         observacoes: null,
       },
     },
   },
   {
     texto: 'Carlos pagou 1200',
-    esperado: { tipo: 'registrar_pagamento', dados: { cliente: 'Carlos Souza', valor: 1200, data: HOJE_FIXO, forma: null } },
+    esperado: { tipo: 'registrar_pagamento', dados: { cliente: 'Carlos Souza', valor: 1200, data: null, forma: null } },
   },
   {
     texto: 'joga o vencimento do Carlos pro dia 30 com mais 100',
@@ -71,5 +74,47 @@ export const MENSAGENS: { texto: string; esperado: Intencao }[] = [
   {
     texto: 'saldo da Ana',
     esperado: { tipo: 'consultar', dados: { tipo: 'saldo_cliente', cliente: 'Ana Paula', data_inicio: null, data_fim: null } },
+  },
+];
+
+/** Mensagens incompletas: o modelo extrai o que há e deixa o resto null (o bot pergunta). */
+export const PARCIAIS: { texto: string; esperado: IntencaoParcial }[] = [
+  {
+    texto: '1000 para receber dia 20/11/2026',
+    esperado: {
+      tipo: 'criar_operacao',
+      dados: {
+        cliente: null,
+        documento: null,
+        valor_emprestado: null,
+        valor_total_receber: 1000,
+        numero_parcelas: null,
+        periodicidade: null,
+        primeiro_vencimento: '2026-11-20',
+        data_emprestimo: null,
+        observacoes: null,
+      },
+    },
+  },
+  {
+    texto: 'cadastro',
+    esperado: { tipo: 'criar_cliente', dados: { nome: null, apelidos: [], telefone: null, documento: null } },
+  },
+  {
+    texto: 'emprestei 1500 pro Marcos',
+    esperado: {
+      tipo: 'criar_operacao',
+      dados: {
+        cliente: 'Marcos Silva',
+        documento: null,
+        valor_emprestado: 1500,
+        valor_total_receber: null,
+        numero_parcelas: null,
+        periodicidade: null,
+        primeiro_vencimento: null,
+        data_emprestimo: null,
+        observacoes: null,
+      },
+    },
   },
 ];

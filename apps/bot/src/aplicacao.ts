@@ -32,7 +32,7 @@ import {
   type PlanoRenegociacao,
   type Repositorio,
 } from '@cobra/db';
-import { parseNovo, parsePagar } from './atalhos';
+import { intencaoRapida, parseNovo, parsePagar } from './atalhos';
 import {
   textoAReceber,
   textoAtrasados,
@@ -42,7 +42,19 @@ import {
 } from './consultas';
 import { BOTOES_CONFIRMACAO, escapar, Formatador, TEXTO_AJUDA, type Botao, type Resposta } from './formatacao';
 import type { Intencao } from './ia/ferramentas';
-import type { Interpretador } from './ia/interpretador';
+import type { Interpretador, ResultadoInterpretacao } from './ia/interpretador';
+import {
+  campoFaltante,
+  completar,
+  ehRascunho,
+  mesclar,
+  pergunta,
+  preencherDireto,
+  problema,
+  resumoParcial,
+  type Campo,
+  type Rascunho,
+} from './rascunho';
 
 type Pendente =
   | { acao: 'operacao'; plano: PlanoOperacao; intencao: Intencao; texto: string }
@@ -71,6 +83,14 @@ interface CadastroPendente {
   existenteId?: string;
 }
 
+/** Lançamento incompleto aguardando o próximo dado. */
+interface SessaoRascunho {
+  rascunho: Rascunho;
+  /** Mensagens que compuseram o lançamento (vai para a auditoria). */
+  texto: string;
+  campo: Campo;
+}
+
 interface EscolhaParcela {
   intencao: Extract<Intencao, { tipo: 'prorrogar' }>;
   texto: string;
@@ -85,6 +105,7 @@ const ESTADOS_TEXTO = [
   'aguardando_novo',
   'aguardando_pagar',
   'aguardando_documento',
+  'rascunho',
 ];
 
 const centavos = (reais: number): Centavos => Math.round(reais * 100);
@@ -119,10 +140,15 @@ export class Aplicacao {
   async mensagem(userId: number, texto: string): Promise<Resposta[]> {
     return this.protegido(async () => {
       const espera = await this.repo.sessaoAtiva(userId, ESTADOS_TEXTO);
+      if (espera?.estado === 'rascunho') {
+        return this.continuarRascunho(userId, espera.id, espera.payload as SessaoRascunho, texto);
+      }
       if (espera) {
         const r = await this.responderEspera(userId, espera.id, espera.estado, espera.payload, texto);
         if (r) return r;
       }
+      const rapida = intencaoRapida(texto);
+      if (rapida) return this.processar(userId, rapida, texto);
       const hoje = await this.repo.hoje();
       const clientes = await this.repo.listarClientes();
       const intencao = await this.ia.interpretar(texto, {
@@ -197,6 +223,8 @@ export class Aplicacao {
           return this.escolherCliente(userId, id, extra ?? '');
         case 'cd':
           return this.confirmarMesmoCliente(userId, id);
+        case 'uc':
+          return this.usarUltimoCliente(userId, id);
         case 'pa':
           return this.escolherParcela(userId, id, Number(extra));
         // Botões dos alertas de parcela
@@ -218,7 +246,7 @@ export class Aplicacao {
 
   // ─────────────────────────── intenções ───────────────────────────
 
-  async processar(userId: number, r: Intencao | { tipo: 'falha'; motivo: string }, texto: string): Promise<Resposta[]> {
+  async processar(userId: number, r: ResultadoInterpretacao, texto: string): Promise<Resposta[]> {
     switch (r.tipo) {
       case 'falha':
         this.log.info({ motivo: r.motivo }, 'interpretação falhou');
@@ -227,16 +255,125 @@ export class Aplicacao {
         return [{ texto: escapar(r.dados.pergunta) }];
       case 'consultar':
         return this.consultar(r);
+      default:
+        return this.avancarRascunho(userId, r, texto);
+    }
+  }
+
+  // ─────────────────────────── rascunho (coleta campo a campo) ───────────────────────────
+
+  /**
+   * Verifica o que falta no lançamento: pergunta UM campo por vez (guardando o rascunho)
+   * ou, completo, segue para cliente → plano → confirmação.
+   */
+  private async avancarRascunho(userId: number, r: Rascunho, texto: string, aviso: string | null = null, recente: Campo | null = null): Promise<Resposta[]> {
+    const hoje = await this.repo.hoje();
+    const prob = problema(r, hoje, recente);
+    if (prob) {
+      const limpo = { ...r, dados: { ...r.dados, [prob.campo]: null } } as Rascunho;
+      return this.avancarRascunho(userId, limpo, texto, prob.mensagem);
+    }
+    const falta = campoFaltante(r);
+    if (!falta) return this.executarIntencao(userId, completar(r, hoje)!, texto);
+
+    const sessao: SessaoRascunho = { rascunho: r, texto, campo: falta };
+    const sid = await this.repo.criarSessao(userId, 'rascunho', sessao, 60);
+    const f = await this.fmt();
+    const teclado: Botao[][] = [];
+    if (falta === 'cliente') {
+      const ultimo = await this.ultimoCliente(userId);
+      if (ultimo) teclado.push([{ texto: `👤 ${ultimo.nome}`, dados: `uc:${sid}` }]);
+    }
+    teclado.push([{ texto: '❌ Cancelar', dados: `x:${sid}` }]);
+    const reais = (v: number) => f.dinheiro(Math.round(v * 100));
+    return [
+      {
+        texto: [
+          ...(aviso ? [`⚠️ ${aviso}`] : []),
+          resumoParcial(r, reais, (d) => f.data(d, hoje.slice(0, 4))),
+          '',
+          pergunta(falta, r),
+        ].join('\n'),
+        teclado,
+      },
+    ];
+  }
+
+  /** Próxima mensagem com um rascunho aberto: tenta ler o dado direto; senão a IA completa o rascunho. */
+  private async continuarRascunho(userId: number, sid: string, s: SessaoRascunho, texto: string): Promise<Resposta[]> {
+    await this.repo.consumirSessao(sid);
+    const hoje = await this.repo.hoje();
+    const historico = `${s.texto}\n${texto}`;
+    const direto = preencherDireto(s.rascunho, s.campo, texto, hoje);
+    if (direto) return this.avancarRascunho(userId, direto, historico, null, s.campo);
+
+    const res = await this.ia.interpretar(texto, {
+      hoje,
+      timezone: (await this.repo.configuracao()).timezone,
+      clientes: await this.repo.listarClientes(),
+      rascunho: s.rascunho,
+      aguardando: pergunta(s.campo, s.rascunho).replace(/<[^>]+>/g, ''),
+    });
+    if (res.tipo === s.rascunho.tipo && ehRascunho(res)) return this.avancarRascunho(userId, mesclar(s.rascunho, res), historico, null, s.campo);
+    if (res.tipo === 'consultar' || res.tipo === 'falha' || res.tipo === 'pedir_esclarecimento') {
+      // Não abandona o lançamento: responde e repete a pergunta pendente.
+      const antes = res.tipo === 'consultar' ? await this.consultar(res) : res.tipo === 'pedir_esclarecimento' ? [{ texto: escapar(res.dados.pergunta) }] : [{ texto: 'Não entendi. 🤔' }];
+      const depois = await this.avancarRascunho(userId, s.rascunho, s.texto);
+      return [...antes, ...depois];
+    }
+    // Mudou de assunto (outro lançamento): o rascunho anterior é descartado.
+    return this.processar(userId, res, texto);
+  }
+
+  private async usarUltimoCliente(userId: number, sid: string): Promise<Resposta[]> {
+    const sessao = await this.repo.obterSessao(sid);
+    const ultimo = await this.ultimoCliente(userId);
+    if (!sessao || sessao.estado !== 'rascunho' || !ultimo || !(await this.repo.consumirSessao(sid))) {
+      return [{ texto: '⌛ Esta pergunta expirou. Envie a mensagem de novo.', editarOriginal: true }];
+    }
+    const s = sessao.payload as SessaoRascunho;
+    const r = { ...s.rascunho, dados: { ...s.rascunho.dados, cliente: ultimo.nome } } as Rascunho;
+    return [{ texto: `👤 ${escapar(ultimo.nome)}`, editarOriginal: true }, ...(await this.avancarRascunho(userId, r, s.texto))];
+  }
+
+  /** Último cliente com quem o usuário lidou (para "é para ele?" quando o nome não vem). */
+  private async ultimoCliente(userId: number): Promise<{ id: string; nome: string } | null> {
+    const s = await this.repo.sessaoAtiva(userId, ['ultimo_cliente']);
+    return (s?.payload as { id: string; nome: string } | undefined) ?? null;
+  }
+
+  private async lembrarCliente(userId: number, c: { id: string; nome: string }): Promise<void> {
+    await this.repo.criarSessao(userId, 'ultimo_cliente', { id: c.id, nome: c.nome }, 120);
+  }
+
+  /** Intenção completa: resolve/cadastra o cliente e monta o plano para confirmação. */
+  private async executarIntencao(userId: number, r: Intencao, texto: string): Promise<Resposta[]> {
+    switch (r.tipo) {
       case 'criar_cliente': {
+        const nome = r.dados.nome!.trim();
         const doc = r.dados.documento ? parseDocumento(r.dados.documento) : null;
-        if (!doc || 'erro' in doc) return this.pedirDocumento(userId, r, texto, r.dados.nome.trim(), doc && 'erro' in doc ? doc.erro : null);
-        return this.cadastrarComDocumento(userId, { intencao: r, texto, nome: r.dados.nome.trim() }, doc);
+        if (!doc || 'erro' in doc) return this.pedirDocumento(userId, r, texto, nome, doc && 'erro' in doc ? doc.erro : null);
+        return this.cadastrarComDocumento(userId, { intencao: r, texto, nome }, doc);
       }
-      case 'criar_operacao':
+      case 'criar_operacao': {
+        // Documento informado junto: ele manda (mesmo cliente com outro nome não duplica).
+        const doc = r.dados.documento ? parseDocumento(r.dados.documento) : null;
+        if (doc && !('erro' in doc)) {
+          const existente = await this.repo.clientePorDocumento(doc);
+          if (existente) {
+            await this.repo.adicionarApelido(existente.id, r.dados.cliente);
+            return this.continuarComCliente(userId, r, texto, existente);
+          }
+          const res = resolverCliente(r.dados.cliente, await this.repo.listarClientes());
+          if (res.tipo !== 'unico') return this.cadastrarComDocumento(userId, { intencao: r, texto, nome: r.dados.cliente }, doc);
+        }
         return this.comCliente(userId, r, texto, r.dados.cliente, true);
+      }
       case 'registrar_pagamento':
       case 'prorrogar':
         return this.comCliente(userId, r, texto, r.dados.cliente, false);
+      default:
+        return this.processar(userId, r, texto);
     }
   }
 
@@ -337,6 +474,7 @@ export class Aplicacao {
   }
 
   private async continuarComCliente(userId: number, intencao: Intencao, texto: string, cliente: ClienteRow | { id: string; nome: string }): Promise<Resposta[]> {
+    await this.lembrarCliente(userId, cliente);
     switch (intencao.tipo) {
       case 'criar_operacao': {
         const d = intencao.dados;
@@ -493,9 +631,14 @@ export class Aplicacao {
       case 'renegociacao':
         await executarRenegociacao(this.repo, p.plano, meta);
         return [{ texto: `${resumo}\n\n✅ <b>Atualizado</b>`, editarOriginal: true }];
-      case 'cliente':
-        await this.repo.criarCliente(p.dados);
-        return [{ texto: `${resumo}\n\n✅ <b>Cadastrado</b>`, editarOriginal: true }];
+      case 'cliente': {
+        const novo = await this.repo.criarCliente(p.dados);
+        await this.lembrarCliente(sessao.telegramUserId, novo);
+        return [
+          { texto: `${resumo}\n\n✅ <b>Cadastrado</b>`, editarOriginal: true },
+          { texto: `Para lançar um empréstimo para ${escapar(novo.nome)}, mande o valor emprestado, quanto vai receber e quando vence. Ex.: <i>emprestei 1000, volta 1300 dia 20/11</i>` },
+        ];
+      }
     }
   }
 
@@ -532,7 +675,8 @@ export class Aplicacao {
           clientes: await this.repo.listarClientes(),
           rascunho: p.intencao,
         });
-        return this.processar(userId, r, `${p.texto}\n[correção] ${texto}`);
+        const corrigida = r.tipo === p.intencao.tipo && ehRascunho(r) && ehRascunho(p.intencao) ? mesclar(p.intencao, r) : r;
+        return this.processar(userId, corrigida, `${p.texto}\n[correção] ${texto}`);
       }
       case 'aguardando_valor_parcial': {
         const valor = parseValor(texto);

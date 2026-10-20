@@ -1,5 +1,5 @@
-import { parseDataCurta, parseValor, type DataISO } from '@cobra/core';
-import type { Intencao } from './ia/ferramentas';
+import { normalizarNome, parseDataCurta, parseValor, type DataISO } from '@cobra/core';
+import type { Intencao, IntencaoParcial } from './ia/ferramentas';
 
 /**
  * Parsers determinísticos dos comandos de atalho (funcionam sem IA).
@@ -37,6 +37,7 @@ export function parseNovo(args: string, hoje: DataISO): Intencao | { erro: strin
     tipo: 'criar_operacao',
     dados: {
       cliente: nome,
+      documento: null,
       valor_emprestado: emprestado / 100,
       valor_total_receber: total / 100,
       numero_parcelas: numero,
@@ -58,4 +59,34 @@ export function parsePagar(args: string, hoje: DataISO): Intencao | { erro: stri
     return { erro: 'Uso: /pagar <code>nome valor [data]</code>\nEx.: /pagar Carlos 1200' };
   }
   return { tipo: 'registrar_pagamento', dados: { cliente: nome, valor: valor / 100, data, forma: null } };
+}
+
+const VAZIO_OPERACAO = {
+  cliente: null,
+  documento: null,
+  valor_emprestado: null,
+  valor_total_receber: null,
+  numero_parcelas: null,
+  periodicidade: null,
+  primeiro_vencimento: null,
+  data_emprestimo: null,
+  observacoes: null,
+} as const;
+
+/**
+ * Palavras-chave curtas que abrem um rascunho sem IA ("cadastro", "novo empréstimo", "pagamento").
+ * Mais rápido, sem custo e sem o modelo confundir com saudação.
+ */
+export function intencaoRapida(texto: string): IntencaoParcial | null {
+  const t = normalizarNome(texto).replace(/[!.?]+$/, '');
+  if (/^(cadastro|cadastrar|cadastrar cliente|novo cliente|cadastro de cliente|cadastrar um cliente)$/.test(t)) {
+    return { tipo: 'criar_cliente', dados: { nome: null, apelidos: [], telefone: null, documento: null } };
+  }
+  if (/^(emprestimo|novo emprestimo|emprestar|lancar emprestimo|registrar emprestimo)$/.test(t)) {
+    return { tipo: 'criar_operacao', dados: { ...VAZIO_OPERACAO } };
+  }
+  if (/^(pagamento|registrar pagamento|recebi|recebimento|baixa)$/.test(t)) {
+    return { tipo: 'registrar_pagamento', dados: { cliente: null, valor: null, data: null, forma: null } };
+  }
+  return null;
 }
