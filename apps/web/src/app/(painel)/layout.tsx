@@ -5,16 +5,11 @@ import { NavLateral, NavRodape } from '@/components/navegacao';
 import { AlternarTema } from '@/components/tema';
 import { Button } from '@/components/ui/button';
 import { MODO_DEMO } from '@/lib/demo';
-import { SEM_LOGIN } from '@/lib/supabase/painel';
 import { sair } from './acoes';
 
 export default function LayoutPainel({ children }: LayoutProps<'/'>) {
-  const podeSair = !SEM_LOGIN && !MODO_DEMO;
-  const aviso = MODO_DEMO
-    ? 'Modo demonstração: dados fictícios em memória.'
-    : SEM_LOGIN
-      ? 'Painel sem login (somente neste computador).'
-      : null;
+  const podeSair = !MODO_DEMO;
+  const aviso = MODO_DEMO ? 'Modo demonstração: dados fictícios em memória.' : null;
   return (
     <div className="flex min-h-dvh">
       {/* Menu lateral (desktop) */}

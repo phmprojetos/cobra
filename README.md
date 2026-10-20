@@ -44,7 +44,7 @@ cp .env.example .env   # preencha os valores
 | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Os mesmos URL e anon key, expostos ao painel |
 | `NEXT_PUBLIC_SITE_URL` | URL pública do painel (destino do magic link) |
 | `TELEGRAM_BOT_TOKEN` | @BotFather |
-| `TELEGRAM_ALLOWED_USER_IDS` | Seu user id (fale com @userinfobot). Outros usuários são ignorados em silêncio. |
+| `TELEGRAM_BOT_USERNAME` | Username do bot (sem @). Usado no link de vínculo do Telegram no painel. |
 | `TELEGRAM_WEBHOOK_SECRET` | `openssl rand -hex 32`. Validado no header `X-Telegram-Bot-Api-Secret-Token`. |
 | `TELEGRAM_WEBHOOK_URL` | `https://<domínio do bot>/telegram` (usado por `webhook:set`) |
 | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | Claude API. Padrão: `claude-haiku-5-5` (o mais barato). |
@@ -67,9 +67,20 @@ pnpm db:types      # regenera packages/db/src/database.types.ts após mudar o sc
 
 No painel do Supabase, em **Authentication**:
 
-1. **Sign In / Providers → Email**: mantenha habilitado e **desligue "Allow new users to sign up"**. O sistema é de usuário único.
-2. **URL Configuration**: *Site URL* = URL do painel. Em *Redirect URLs*, adicione `https://<painel>/auth/callback` e `http://localhost:3000/auth/callback`.
-3. **Users → Add user**: crie o seu usuário com o e-mail que você vai usar no login.
+1. **Sign In / Providers → Email**: mantenha habilitado e **desligue "Allow new users to sign up"**. Usuários são criados pelo administrador (abaixo).
+2. **URL Configuration**: *Site URL* = URL do painel. Em *Redirect URLs*, adicione `https://<painel>/auth/callback` e `http://localhost:3100/auth/callback`.
+
+### Usuários e carteiras (multiusuário)
+
+Cada **carteira** tem seus próprios clientes, empréstimos, regras de alerta e canal; quem está numa carteira não vê as outras (RLS + filtro por `carteira_id`). Todos os usuários de uma carteira têm as mesmas permissões.
+
+```bash
+pnpm usuario:criar ana@exemplo.com                        # carteira nova (nome = e-mail)
+pnpm usuario:criar ana@exemplo.com --nova "Carteira Ana"  # carteira nova com nome
+pnpm usuario:criar socio@exemplo.com --carteira Principal # entra numa carteira existente
+```
+
+O usuário entra no painel pelo magic link e, em **Configurações → Telegram → Vincular meu Telegram**, gera um link de uso único (15 min) que libera o bot para o Telegram dele, já apontando para a carteira certa. O bot ignora quem não está vinculado (no privado, explica como vincular).
 
 > O SMTP padrão do Supabase tem limite baixo de envios por hora. Para uso contínuo, configure um SMTP próprio em *Authentication → Emails*.
 

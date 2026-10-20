@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   atualizarStatus,
   cancelarOperacao,
+  Contas,
   criarClienteServico,
   executarOperacao,
   executarPagamento,
@@ -32,13 +33,14 @@ const meta = { origem: 'telegram' as const, mensagemTelegram: 'teste' };
 
 describe.skipIf(!disponivel)('integração com Supabase local', () => {
   const db = disponivel ? criarClienteServico(URL, SERVICE) : (null as never);
-  const repo = new Repositorio(db);
+  let repo: Repositorio;
   let hoje: string;
   let clienteId: string;
   const sufixo = Date.now().toString(36);
   const cpfTeste = completarCpf(String(Date.now()).slice(-9));
 
   beforeAll(async () => {
+    repo = new Repositorio(db, await new Contas(db).criarCarteira(`Teste ${sufixo}`));
     hoje = await repo.hoje();
     const c = await repo.criarCliente({ nome: `Teste ${sufixo}`, apelidos: [`Zé Tést ${sufixo}`], documento: { tipo: 'cpf', numero: cpfTeste } });
     clienteId = c.id;

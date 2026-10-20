@@ -1,10 +1,10 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
 import Anthropic from '@anthropic-ai/sdk';
-import { criarClienteServico, Repositorio } from '@cobra/db';
+import { Contas, criarClienteServico, Repositorio } from '@cobra/db';
 import { webhookCallback } from 'grammy';
 import { Aplicacao, type Log } from './aplicacao';
-import { criarBot, opcoesEnvio, registrarComandos } from './bot';
+import { criarBot, opcoesEnvio, registrarComandos, type AcessoBot } from './bot';
 import { carregarConfig } from './config';
 import { InterpretadorClaude } from './ia/interpretador';
 import { TranscritorGroq } from './ia/transcricao';
@@ -19,15 +19,46 @@ const log: Log = {
 };
 
 const config = carregarConfig();
-const repo = new Repositorio(criarClienteServico(config.SUPABASE_URL, config.SUPABASE_SERVICE_ROLE_KEY), {
-  MOEDA: config.MOEDA,
-  LOCALE: config.LOCALE,
-  TIMEZONE: config.TIMEZONE,
-});
+const db = criarClienteServico(config.SUPABASE_URL, config.SUPABASE_SERVICE_ROLE_KEY);
+const contas = new Contas(db);
 const ia = new InterpretadorClaude(new Anthropic({ apiKey: config.ANTHROPIC_API_KEY || null }), config.ANTHROPIC_MODEL);
 const enviarParaChat: Enviar = (chatId, r) => enviar(chatId, r);
-const app = new Aplicacao(repo, ia, log, enviarParaChat);
-const bot = criarBot(config.TELEGRAM_BOT_TOKEN, app, config.TELEGRAM_ALLOWED_USER_IDS, log, {
+
+/** Uma aplicação (com seu repositório) por carteira, criada sob demanda. */
+const porCarteira = new Map<string, { repo: Repositorio; app: Aplicacao }>();
+function daCarteira(carteiraId: string) {
+  let x = porCarteira.get(carteiraId);
+  if (!x) {
+    const repo = new Repositorio(db, carteiraId, { MOEDA: config.MOEDA, LOCALE: config.LOCALE, TIMEZONE: config.TIMEZONE });
+    x = { repo, app: new Aplicacao(repo, ia, log, enviarParaChat) };
+    porCarteira.set(carteiraId, x);
+  }
+  return x;
+}
+
+/** Telegram → carteira, com cache curto (desvincular no painel vale em até 1 min). */
+const vinculos = new Map<number, { carteira: string | null; em: number }>();
+async function carteiraDoTelegram(id: number): Promise<string | null> {
+  const c = vinculos.get(id);
+  if (c && Date.now() - c.em < 60_000) return c.carteira;
+  const carteira = await contas.carteiraDoTelegram(id);
+  vinculos.set(id, { carteira, em: Date.now() });
+  return carteira;
+}
+
+const acesso: AcessoBot = {
+  app: async (id) => {
+    const carteira = await carteiraDoTelegram(id);
+    return carteira ? daCarteira(carteira).app : null;
+  },
+  vincular: async (codigo, id, nome) => {
+    const carteira = await contas.vincularTelegram(codigo, id, nome);
+    vinculos.delete(id);
+    return !!carteira;
+  },
+};
+
+const bot = criarBot(config.TELEGRAM_BOT_TOKEN, acesso, log, {
   transcritor: config.GROQ_API_KEY ? new TranscritorGroq(config.GROQ_API_KEY, config.GROQ_MODELO_AUDIO) : null,
   maxSegundos: config.AUDIO_MAX_SEGUNDOS,
   baixar: async (filePath) => {
@@ -48,10 +79,20 @@ async function rodarJob() {
   if (jobRodando) return { ignorado: true };
   jobRodando = true;
   try {
-    return await executarJobNotificacoes(repo, enviar, config.TELEGRAM_ALLOWED_USER_IDS, log, bot.botInfo.username);
-  } catch (err) {
-    log.error({ err }, 'job de notificações falhou');
-    throw err;
+    // Cada carteira com suas regras, seu canal e seus Telegrams; a falha de uma não para as outras.
+    const total = { statusAtualizados: 0, enviados: 0, falhas: 0 };
+    for (const { id } of await contas.carteiras()) {
+      try {
+        const r = await executarJobNotificacoes(daCarteira(id).repo, enviar, await contas.telegramsDaCarteira(id), log, bot.botInfo.username);
+        total.statusAtualizados += r.statusAtualizados;
+        total.enviados += r.enviados;
+        total.falhas += r.falhas;
+      } catch (err) {
+        total.falhas++;
+        log.error({ err, carteira: id }, 'job de notificações falhou');
+      }
+    }
+    return total;
   } finally {
     jobRodando = false;
   }
@@ -63,7 +104,7 @@ function agendarJob() {
   const proximo = intervalo - (Date.now() % intervalo) + 5_000;
   setTimeout(() => {
     void rodarJob().catch(() => {});
-    void repo.limparSessoesExpiradas().catch(() => {});
+    void contas.limparSessoesExpiradas().catch(() => {});
     agendarJob();
   }, proximo);
 }

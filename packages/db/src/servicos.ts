@@ -23,7 +23,6 @@ import {
   type StatusOperacao,
   type StatusParcela,
 } from '@cobra/core';
-import type { Json } from './database.types';
 import { paraParcela, type ParcelaRow } from './mapeadores';
 import { ok, semErro, type Repositorio } from './repositorio';
 
@@ -95,7 +94,7 @@ export async function executarOperacao(repo: Repositorio, plano: PlanoOperacao, 
       valor_juros: p.valorJuros,
     })),
   };
-  return ok(await repo.db.rpc('rpc_criar_operacao', { p: payload as unknown as Json }));
+  return ok(await repo.rpc('rpc_criar_operacao', payload));
 }
 
 // ───────────────────────── pagamento ─────────────────────────
@@ -124,7 +123,7 @@ async function parcelasAlvo(
 ): Promise<{ clienteId: string; todas: ParcelaRow[]; alvo: ParcelaRow[] }> {
   let operacaoId = alvo.operacaoId;
   if (alvo.parcelaId) {
-    const p = ok(await repo.db.from('parcelas').select('operacao_id').eq('id', alvo.parcelaId).single());
+    const p = ok(await repo.db.from('parcelas').select('operacao_id').eq('carteira_id', repo.carteiraId).eq('id', alvo.parcelaId).single());
     operacaoId = p.operacao_id;
   }
   const c = await repo.carregarCarteira(operacaoId ? { operacaoId } : { clienteId: alvo.clienteId! });
@@ -195,7 +194,7 @@ export async function planejarPagamento(
     ),
   }));
   // Preserva "renegociada" quando aplicável.
-  const renegs = ok(await repo.db.from('operacoes').select('id, renegociacoes').in('id', opIds));
+  const renegs = ok(await repo.db.from('operacoes').select('id, renegociacoes').eq('carteira_id', repo.carteiraId).in('id', opIds));
   for (const o of operacoes) {
     const r = renegs.find((x) => x.id === o.id)?.renegociacoes ?? 0;
     if (o.status === 'ativa' && r > 0) o.status = 'renegociada';
@@ -248,7 +247,7 @@ export async function executarPagamento(repo: Repositorio, plano: PlanoPagamento
     })),
     operacoes: plano.operacoes,
   };
-  return ok(await repo.db.rpc('rpc_registrar_pagamento', { p: payload as unknown as Json }));
+  return ok(await repo.rpc('rpc_registrar_pagamento', payload));
 }
 
 // ───────────────────────── renegociação ─────────────────────────
@@ -279,7 +278,7 @@ export async function planejarRenegociacao(
   e: { parcelaId: string; novoVencimento?: DataISO; acrescimo?: Centavos },
 ): Promise<PlanoRenegociacao> {
   const hoje = await repo.hoje();
-  const par = ok(await repo.db.from('parcelas').select('*').eq('id', e.parcelaId).single());
+  const par = ok(await repo.db.from('parcelas').select('*').eq('carteira_id', repo.carteiraId).eq('id', e.parcelaId).single());
   const c = await repo.carregarCarteira({ operacaoId: par.operacao_id });
   const op = c.operacoes[0];
   if (!op) throw new ErroRegra('sem_operacao', 'Operação não encontrada');
@@ -334,7 +333,7 @@ export async function executarRenegociacao(repo: Repositorio, plano: PlanoRenego
     taxa_efetiva_mensal: plano.indicadores.taxaEfetivaMensal,
     mensagem_telegram: meta.mensagemTelegram ?? null,
   };
-  semErro(await repo.db.rpc('rpc_renegociar_parcela', { p: payload as unknown as Json }));
+  semErro(await repo.rpc('rpc_renegociar_parcela', payload));
 }
 
 // ───────────────────────── perda / cancelamento ─────────────────────────
@@ -343,14 +342,12 @@ export async function marcarPerda(repo: Repositorio, operacaoId: string, meta: M
   const c = await repo.carregarCarteira({ operacaoId });
   const perda = calcularPerda(c.carteira.parcelas);
   semErro(
-    await repo.db.rpc('rpc_marcar_perda', {
-      p: {
-        operacao_id: operacaoId,
-        perdida_em: await repo.hoje(),
-        valor_prejuizo: perda.prejuizo,
-        juros_nao_recebidos: perda.jurosNaoRecebidos,
-        mensagem_telegram: meta.mensagemTelegram ?? null,
-      },
+    await repo.rpc('rpc_marcar_perda', {
+      operacao_id: operacaoId,
+      perdida_em: await repo.hoje(),
+      valor_prejuizo: perda.prejuizo,
+      juros_nao_recebidos: perda.jurosNaoRecebidos,
+      mensagem_telegram: meta.mensagemTelegram ?? null,
     }),
   );
   return perda;
@@ -358,9 +355,7 @@ export async function marcarPerda(repo: Repositorio, operacaoId: string, meta: M
 
 export async function cancelarOperacao(repo: Repositorio, operacaoId: string, motivo: string | null, meta: MetaLancamento) {
   semErro(
-    await repo.db.rpc('rpc_cancelar_operacao', {
-      p: { operacao_id: operacaoId, motivo, mensagem_telegram: meta.mensagemTelegram ?? null },
-    }),
+    await repo.rpc('rpc_cancelar_operacao', { operacao_id: operacaoId, motivo, mensagem_telegram: meta.mensagemTelegram ?? null }),
   );
 }
 
@@ -383,7 +378,7 @@ export async function atualizarStatus(repo: Repositorio): Promise<number> {
     if (s !== op.status) operacoes.push({ id: op.id, status: s });
   }
   if (parcelas.length === 0 && operacoes.length === 0) return 0;
-  return ok(await repo.db.rpc('rpc_atualizar_status', { p: { parcelas, operacoes } }));
+  return ok(await repo.rpc('rpc_atualizar_status', { parcelas, operacoes }));
 }
 
 // ───────────────────────── renovação (pagou só os juros) ─────────────────────────
@@ -468,5 +463,5 @@ export async function executarRenovacao(repo: Repositorio, plano: PlanoRenovacao
     origem: meta.origem,
     mensagem_telegram: meta.mensagemTelegram ?? null,
   };
-  return ok(await repo.db.rpc('rpc_renovar_parcela', { p: payload as unknown as Json }));
+  return ok(await repo.rpc('rpc_renovar_parcela', payload));
 }

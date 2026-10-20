@@ -18,7 +18,8 @@
     "db:push": "sh -c 'set -a; . ./.env; supabase db push --db-url \"$SUPABASE_DB_URL\"'",
     "db:seed": "sh -c 'set -a; . ./.env; supabase db push --include-seed --db-url \"$SUPABASE_DB_URL\"'",
     "test:db": "RUN_DB_TESTS=1 pnpm -r --if-present test",
-    "demo": "DEMO=1 pnpm --filter @cobra/web dev"
+    "demo": "DEMO=1 pnpm --filter @cobra/web dev",
+    "usuario:criar": "sh -c 'set -a; . ./.env; set +a; pnpm --filter @cobra/bot exec tsx scripts/criar-usuario.ts \"$@\"' --"
   },
   "devDependencies": {
     "@types/node": "^22",

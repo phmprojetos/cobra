@@ -6,7 +6,7 @@ import { botoesClientes, textoClientes } from '../src/consultas';
 
 const agora = '2026-10-20T00:00:00Z';
 const cli = (id: string, nome: string, tipo: ClienteRow['documento_tipo'], doc: string, apelidos: string[] = []): ClienteRow => ({
-  id, nome, apelidos, documento_tipo: tipo, documento: doc, telefone: null, observacoes: null, ativo: true, created_at: agora, updated_at: agora,
+  id, nome, apelidos, documento_tipo: tipo, documento: doc, telefone: null, observacoes: null, ativo: true, created_at: agora, updated_at: agora, carteira_id: 'c1',
 });
 
 const clientes = [
@@ -17,11 +17,11 @@ const clientes = [
 const op: OperacaoRow = {
   id: 'op1', cliente_id: '1', data_emprestimo: '2026-10-20', valor_principal: 100000, valor_total_receber: 130000, juros_total: 30000,
   taxa_periodo: 0.3, taxa_efetiva_mensal: 0.289, tipo: 'unica', periodicidade: null, status: 'ativa', renegociacoes: 0, valor_prejuizo: 0,
-  perdida_em: null, cancelado_em: null, observacoes: null, origem: 'telegram', mensagem_origem_id: null, created_at: agora, updated_at: agora,
+  perdida_em: null, cancelado_em: null, observacoes: null, origem: 'telegram', mensagem_origem_id: null, created_at: agora, updated_at: agora, carteira_id: 'c1',
 };
 const par: ParcelaRow = {
   id: 'p1', operacao_id: 'op1', numero: 1, vencimento: '2026-11-20', valor: 130000, valor_principal: 100000, valor_juros: 30000,
-  valor_pago: 0, principal_pago: 0, juros_pago: 0, status: 'aberta', cancelado_em: null, created_at: agora, updated_at: agora,
+  valor_pago: 0, principal_pago: 0, juros_pago: 0, status: 'aberta', cancelado_em: null, created_at: agora, updated_at: agora, carteira_id: 'c1',
 };
 const carteira: CarteiraCompleta = {
   clientes: new Map(clientes.map((c) => [c.id, c])),

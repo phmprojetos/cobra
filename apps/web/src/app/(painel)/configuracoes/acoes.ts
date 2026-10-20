@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { fonteDemo, MODO_DEMO } from '@/lib/demo';
-import { dbPainel } from '@/lib/supabase/painel';
+import { repoPainel } from '@/lib/supabase/painel';
 
 export interface Resultado {
   ok: boolean;
@@ -50,15 +50,17 @@ export async function salvarGeral(_: Resultado | null, form: FormData): Promise<
     revalidatePath('/', 'layout');
     return { ok: true, mensagem: 'Configurações salvas (modo demonstração).' };
   }
-  const db = await dbPainel();
-  const { error } = await db.from('configuracoes').upsert([
-    { chave: 'moeda', valor: moeda },
-    { chave: 'locale', valor: locale },
-    { chave: 'timezone', valor: timezone },
-    { chave: 'estrategia_alocacao', valor: estrategia === 'juros_primeiro' ? 'juros_primeiro' : 'proporcional' },
-    // `false` = silêncio desligado (a coluna jsonb não aceita null)
-    { chave: 'horario_silencio', valor: silencioAtivo ? { inicio, fim } : false },
-  ]);
+  const { db, carteiraId } = await repoPainel();
+  const { error } = await db.from('configuracoes').upsert(
+    [
+      { chave: 'moeda', valor: moeda },
+      { chave: 'locale', valor: locale },
+      { chave: 'timezone', valor: timezone },
+      { chave: 'estrategia_alocacao', valor: estrategia === 'juros_primeiro' ? 'juros_primeiro' : 'proporcional' },
+      // `false` = silêncio desligado (a coluna jsonb não aceita null)
+      { chave: 'horario_silencio', valor: silencioAtivo ? { inicio, fim } : false },
+    ].map((c) => ({ ...c, carteira_id: carteiraId })),
+  );
   if (error) return { ok: false, mensagem: error.message };
   revalidatePath('/', 'layout');
   return { ok: true, mensagem: 'Configurações salvas.' };
@@ -91,14 +93,38 @@ export async function salvarRegra(_: Resultado | null, form: FormData): Promise<
       revalidatePath('/configuracoes');
       return { ok: true, mensagem: 'Regra salva (modo demonstração).' };
     }
-    const db = await dbPainel();
+    const { db, carteiraId } = await repoPainel();
     const { error } = id
-      ? await db.from('regras_notificacao').update(dados).eq('id', id)
-      : await db.from('regras_notificacao').insert(dados);
+      ? await db.from('regras_notificacao').update(dados).eq('carteira_id', carteiraId).eq('id', id)
+      : await db.from('regras_notificacao').insert({ ...dados, carteira_id: carteiraId });
     if (error) return { ok: false, mensagem: error.message };
   } catch (e) {
     return { ok: false, mensagem: (e as Error).message };
   }
   revalidatePath('/configuracoes');
   return { ok: true, mensagem: 'Regra salva.' };
+}
+
+// ───────────── Telegram ─────────────
+
+/** Gera um link de uso único (15 min) que vincula o Telegram de quem abrir à carteira do usuário logado. */
+export async function gerarLinkTelegram(): Promise<{ ok: boolean; mensagem: string; link?: string }> {
+  if (MODO_DEMO) return { ok: false, mensagem: 'Indisponível no modo demonstração.' };
+  const bot = process.env.TELEGRAM_BOT_USERNAME;
+  if (!bot) return { ok: false, mensagem: 'Configure TELEGRAM_BOT_USERNAME no .env do painel.' };
+  const { db } = await repoPainel();
+  const { data, error } = await db.rpc('gerar_codigo_vinculo');
+  if (error || !data) return { ok: false, mensagem: 'Não foi possível gerar o link. Tente de novo.' };
+  return { ok: true, mensagem: 'Link gerado.', link: `https://t.me/${bot}?start=v_${data}` };
+}
+
+export async function desvincularTelegram(_: Resultado | null, form: FormData): Promise<Resultado> {
+  if (MODO_DEMO) return { ok: false, mensagem: 'Indisponível no modo demonstração.' };
+  const id = Number(form.get('telegram_user_id'));
+  if (!Number.isSafeInteger(id)) return { ok: false, mensagem: 'Telegram inválido.' };
+  const { db, carteiraId } = await repoPainel();
+  const { error } = await db.from('vinculos_telegram').delete().eq('carteira_id', carteiraId).eq('telegram_user_id', id);
+  if (error) return { ok: false, mensagem: error.message };
+  revalidatePath('/configuracoes');
+  return { ok: true, mensagem: 'Telegram desvinculado. Ele perde o acesso ao bot em até 1 minuto.' };
 }

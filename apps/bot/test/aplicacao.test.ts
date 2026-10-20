@@ -1,9 +1,9 @@
 import { completarCpf, formatarDocumento, instanteLocal, somarDias } from '@cobra/core';
-import { criarClienteServico, Repositorio } from '@cobra/db';
+import { Contas, criarClienteServico, Repositorio } from '@cobra/db';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Bot } from 'grammy';
 import { Aplicacao } from '../src/aplicacao';
-import { criarBot } from '../src/bot';
+import { acessoFixo, criarBot } from '../src/bot';
 import type { Resposta } from '../src/formatacao';
 import type { Intencao } from '../src/ia/ferramentas';
 import type { ContextoInterpretacao, Interpretador, ResultadoInterpretacao } from '../src/ia/interpretador';
@@ -40,9 +40,9 @@ function botao(r: Resposta[], prefixo: string): string {
 
 describe.skipIf(!disponivel)('fluxos do bot (Supabase)', () => {
   const db = disponivel ? criarClienteServico(URL, SERVICE) : (null as never);
-  const repo = new Repositorio(db);
   const ia = new InterpretadorFake();
-  const app = new Aplicacao(repo, ia, silencioso);
+  let repo: Repositorio;
+  let app: Aplicacao;
   const suf = Date.now().toString(36).toUpperCase();
   const nomeCarlos = `Carlos Teste${suf}`;
   const clientes: string[] = [];
@@ -53,6 +53,8 @@ describe.skipIf(!disponivel)('fluxos do bot (Supabase)', () => {
   const cpf = (i: number) => completarCpf(String(base * 10 + i));
 
   beforeAll(async () => {
+    repo = new Repositorio(db, await new Contas(db).criarCarteira(`Teste ${suf}`));
+    app = new Aplicacao(repo, ia, silencioso);
     hoje = await repo.hoje();
     const nomes = [nomeCarlos, `Ana Xavier Q${suf}`, `Ana Yara Q${suf}`];
     for (const [i, nome] of nomes.entries()) {
@@ -96,7 +98,7 @@ describe.skipIf(!disponivel)('fluxos do bot (Supabase)', () => {
 
     // Job às 09:30 de hoje: lembrete D-1 da parcela que vence amanhã
     const tz = (await repo.configuracao()).timezone;
-    const repoJob = new Repositorio(db, {}, () => instanteLocal(hoje, '09:30', tz));
+    const repoJob = new Repositorio(db, repo.carteiraId, {}, () => instanteLocal(hoje, '09:30', tz));
     const enviados: Resposta[] = [];
     const enviar = async (_chat: number, r: Resposta) => (enviados.push(r), enviados.length);
     await executarJobNotificacoes(repoJob, enviar, [USER], silencioso);
@@ -230,7 +232,7 @@ describe.skipIf(!disponivel)('fluxos do bot (Supabase)', () => {
 
   it('whitelist: ignora silenciosamente quem não está autorizado', async () => {
     const chamadas: string[] = [];
-    const bot = criarBot('123:TESTE', app, [USER], silencioso) as Bot;
+    const bot = criarBot('123:TESTE', acessoFixo(app, [USER]), silencioso) as unknown as Bot;
     bot.botInfo = { id: 1, is_bot: true, first_name: 'cobra', username: 'cobra_bot', can_join_groups: false, can_read_all_group_messages: false, supports_inline_queries: false, can_connect_to_business: false, has_main_web_app: false, has_topics_enabled: false, allows_users_to_create_topics: false } as Bot['botInfo'];
     bot.api.config.use(async (_prev, method) => {
       chamadas.push(method);

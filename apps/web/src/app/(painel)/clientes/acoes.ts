@@ -1,11 +1,10 @@
 'use server';
 
 import { ErroRegra, mascararTelefone, parseDocumento, telefoneValido, type Documento } from '@cobra/core';
-import { Repositorio } from '@cobra/db';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { MODO_DEMO } from '@/lib/demo';
-import { dbPainel } from '@/lib/supabase/painel';
+import { repoPainel } from '@/lib/supabase/painel';
 
 export interface EstadoCliente {
   erro?: string;
@@ -59,7 +58,7 @@ async function processar(form: FormData): Promise<EstadoCliente> {
   if ('estado' in lido) return lido.estado;
   const { dados } = lido;
   const id = String(form.get('id') ?? '') || null;
-  const repo = new Repositorio(await dbPainel());
+  const repo = await repoPainel();
 
   const dono = await repo.clientePorDocumento(dados.documento);
   if (dono && dono.id !== id) return { existente: { id: dono.id, nome: dono.nome }, campos: { documento: 'Documento já cadastrado.' } };

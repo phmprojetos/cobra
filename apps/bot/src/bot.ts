@@ -26,7 +26,7 @@ export function opcoesEnvio(r: Resposta) {
   };
 }
 
-async function responder(ctx: Context, respostas: Resposta[], log: Log): Promise<void> {
+async function responder(ctx: Ctx, respostas: Resposta[], log: Log): Promise<void> {
   for (const r of respostas) {
     const extra = opcoesEnvio(r);
     if (r.editarOriginal && ctx.callbackQuery?.message) {
@@ -43,18 +43,50 @@ async function responder(ctx: Context, respostas: Resposta[], log: Log): Promise
   }
 }
 
-export function criarBot(token: string, app: Aplicacao, permitidos: readonly number[], log: Log, audio?: OpcoesAudio): Bot {
-  const bot = new Bot(token);
-  const whitelist = new Set(permitidos);
+/** Quem pode usar o bot e com qual carteira (cada Telegram vinculado aponta para uma carteira). */
+export interface AcessoBot {
+  /** Aplicação da carteira deste Telegram, ou null se ele não está vinculado. */
+  app(telegramUserId: number): Promise<Aplicacao | null>;
+  /** Consome o código de vínculo gerado no painel. true = vinculado. */
+  vincular(codigo: string, telegramUserId: number, nome: string | null): Promise<boolean>;
+}
 
-  // Segurança: ignora silenciosamente quem não está na whitelist.
+/** Acesso fixo (testes): uma aplicação para uma lista de Telegrams. */
+export function acessoFixo(app: Aplicacao, permitidos: readonly number[]): AcessoBot {
+  const ids = new Set(permitidos);
+  return { app: async (id) => (ids.has(id) ? app : null), vincular: async () => false };
+}
+
+export const TEXTO_NAO_VINCULADO =
+  '🔒 Este bot é privado.\nPara usar, entre no painel e vá em <b>Configurações → Telegram → Vincular meu Telegram</b>.';
+
+type Ctx = Context & { app: Aplicacao };
+
+export function criarBot(token: string, acesso: AcessoBot, log: Log, audio?: OpcoesAudio): Bot<Ctx> {
+  const bot = new Bot<Ctx>(token);
+
+  // Segurança: só Telegrams vinculados a uma carteira. Cada um opera apenas a própria carteira.
   bot.use(async (ctx, next) => {
     const id = ctx.from?.id;
-    if (!id || !whitelist.has(id)) {
-      if (id) log.info({ id }, 'usuário fora da whitelist ignorado');
+    if (!id) return;
+    const app = await acesso.app(id);
+    if (app) {
+      ctx.app = app;
+      await next();
       return;
     }
-    await next();
+    // Fora de conversas privadas (canais/grupos), ignora em silêncio.
+    if (ctx.chat?.type !== 'private' || !ctx.message) return;
+    const codigo = /^\/start\s+v_([A-Za-z0-9]+)$/.exec(ctx.message.text ?? '')?.[1];
+    if (codigo) {
+      const nome = [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(' ') || ctx.from.username || null;
+      const ok = await acesso.vincular(codigo, id, nome);
+      log.info({ id, ok }, 'vínculo de telegram');
+      await ctx.reply(ok ? '✅ Telegram vinculado à sua carteira! Mande /ajuda para começar.' : '⌛ Código inválido ou expirado. Gere outro no painel.');
+      return;
+    }
+    log.info({ id }, 'telegram não vinculado');
+    await ctx.reply(TEXTO_NAO_VINCULADO, { parse_mode: 'HTML' });
   });
 
   // Bot adicionado/removido como admin de um canal ou grupo (por um usuário autorizado):
@@ -65,15 +97,15 @@ export function criarBot(token: string, app: Aplicacao, permitidos: readonly num
     const titulo = chat.title;
     const ativo = novo.status === 'administrator' || (novo.status === 'member' && chat.type !== 'channel');
     const respostas = ativo
-      ? await app.conectarCanal(ctx.from.id, { id: chat.id, titulo })
-      : await app.desconectarCanal(chat.id);
+      ? await ctx.app.conectarCanal(ctx.from.id, { id: chat.id, titulo })
+      : await ctx.app.desconectarCanal(chat.id);
     for (const r of respostas) await ctx.api.sendMessage(ctx.from.id, r.texto, opcoesEnvio(r)).catch((err) => log.error({ err }, 'aviso de canal'));
   });
 
   for (const nome of COMANDOS) {
     bot.command(nome, async (ctx) => {
       await ctx.replyWithChatAction('typing').catch(() => {});
-      await responder(ctx, await app.comando(ctx.from!.id, nome, ctx.match ?? ''), log);
+      await responder(ctx, await ctx.app.comando(ctx.from!.id, nome, ctx.match ?? ''), log);
     });
   }
 
@@ -83,7 +115,7 @@ export function criarBot(token: string, app: Aplicacao, permitidos: readonly num
       return;
     }
     await ctx.replyWithChatAction('typing').catch(() => {});
-    await responder(ctx, await app.mensagem(ctx.from.id, ctx.message.text), log);
+    await responder(ctx, await ctx.app.mensagem(ctx.from.id, ctx.message.text), log);
   });
 
   // Áudio: transcreve e segue o mesmo fluxo do texto (mostrando o que foi entendido).
@@ -114,7 +146,7 @@ export function criarBot(token: string, app: Aplicacao, permitidos: readonly num
       return;
     }
     await ctx.reply(`🎙️ <i>${escapar(texto)}</i>`, { parse_mode: 'HTML' });
-    await responder(ctx, await app.mensagem(ctx.from.id, texto), log);
+    await responder(ctx, await ctx.app.mensagem(ctx.from.id, texto), log);
   });
 
   bot.on('message', (ctx) => ctx.reply('Por enquanto entendo texto e áudio. 🙂'));
@@ -126,14 +158,14 @@ export function criarBot(token: string, app: Aplicacao, permitidos: readonly num
     if (!['rt', 'rp', 'ad', 'al'].includes(prefixo)) {
       await ctx.editMessageReplyMarkup({ reply_markup: new InlineKeyboard() }).catch(() => {});
     }
-    await responder(ctx, await app.callback(ctx.from.id, ctx.callbackQuery.data), log);
+    await responder(ctx, await ctx.app.callback(ctx.from.id, ctx.callbackQuery.data), log);
   });
 
   bot.catch((err) => log.error({ err: err.error }, 'erro no bot'));
   return bot;
 }
 
-export async function registrarComandos(bot: Bot): Promise<void> {
+export async function registrarComandos(bot: Pick<Bot, 'api'>): Promise<void> {
   await bot.api.setMyCommands([
     { command: 'hoje', description: 'Vencimentos de hoje e atrasados' },
     { command: 'semana', description: 'A receber nesta semana' },

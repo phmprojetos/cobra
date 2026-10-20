@@ -1,16 +1,15 @@
 'use server';
 
 import { randomUUID } from 'node:crypto';
-import { Repositorio } from '@cobra/db';
 import { revalidatePath } from 'next/cache';
 import { MODO_DEMO } from '@/lib/demo';
 import { nomeSeguro, tipoDoArquivo, TAMANHO_MAX, validarArquivo } from '@/lib/documentos';
-import { dbPainel } from '@/lib/supabase/painel';
+import { repoPainel } from '@/lib/supabase/painel';
 
 const UUID = /^[0-9a-f-]{36}$/;
 
 async function repo() {
-  return new Repositorio(await dbPainel());
+  return await repoPainel();
 }
 
 /** Passo 1: valida e devolve uma URL de envio assinada (o navegador envia direto ao Storage). */

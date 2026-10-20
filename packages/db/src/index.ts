@@ -1,4 +1,5 @@
 export * from './cliente';
+export * from './contas';
 export * from './mapeadores';
 export * from './repositorio';
 export * from './servicos';

@@ -1,21 +1,8 @@
 import { z } from 'zod';
 
-const lista = z
-  .string()
-  .default('')
-  .transform((s) =>
-    s
-      .split(',')
-      .map((x) => x.trim())
-      .filter(Boolean)
-      .map(Number),
-  )
-  .refine((ids) => ids.every((n) => Number.isSafeInteger(n)), 'IDs devem ser numéricos');
-
 const esquema = z.object({
   TELEGRAM_BOT_TOKEN: z.string().min(10),
   TELEGRAM_WEBHOOK_SECRET: z.string().default(''),
-  TELEGRAM_ALLOWED_USER_IDS: lista,
   ANTHROPIC_API_KEY: z.string().default(''),
   ANTHROPIC_MODEL: z.string().default('claude-haiku-5-5'),
   SUPABASE_URL: z.string().url(),
@@ -50,9 +37,6 @@ export function carregarConfig(env: NodeJS.ProcessEnv = process.env): ConfigBot 
   const c = r.data;
   if (c.BOT_MODO === 'webhook' && c.TELEGRAM_WEBHOOK_SECRET.length < 16) {
     throw new Error('TELEGRAM_WEBHOOK_SECRET (≥ 16 caracteres) é obrigatório no modo webhook');
-  }
-  if (c.TELEGRAM_ALLOWED_USER_IDS.length === 0) {
-    throw new Error('TELEGRAM_ALLOWED_USER_IDS vazio: ninguém conseguiria usar o bot');
   }
   return c;
 }

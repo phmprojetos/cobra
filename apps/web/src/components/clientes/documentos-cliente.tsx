@@ -1,10 +1,9 @@
 import { Download, Eye, FileText, Files, ImageIcon, Trash2 } from 'lucide-react';
-import { Repositorio } from '@cobra/db';
 import { removerDocumento } from '@/app/(painel)/clientes/documentos-acoes';
 import { Secao, Vazio } from '@/components/painel/ui';
 import { MODO_DEMO } from '@/lib/demo';
 import { exibivel, formatarBytes } from '@/lib/documentos';
-import { dbPainel } from '@/lib/supabase/painel';
+import { repoPainel } from '@/lib/supabase/painel';
 import { EnvioDocumentos } from './envio-documentos';
 
 /** Seção "Documentos" da ficha: lista com miniaturas e links temporários (bucket privado). */
@@ -16,7 +15,7 @@ export async function DocumentosCliente({ clienteId }: { clienteId: string }) {
       </Secao>
     );
   }
-  const repo = new Repositorio(await dbPainel());
+  const repo = await repoPainel();
   const docs = await repo.documentosDoCliente(clienteId);
   // Links válidos por 5 minutos: nada fica exposto por link público. As miniaturas usam <img> comum
   // (URL assinada temporária, que não deve passar pelo otimizador de imagens).

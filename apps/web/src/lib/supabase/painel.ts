@@ -1,23 +1,26 @@
 import 'server-only';
-import { criarClienteServico, type Db } from '@cobra/db';
+import { Repositorio } from '@cobra/db';
+import { redirect } from 'next/navigation';
+import { cache } from 'react';
 import { supabaseServidor } from './server';
 
 /**
- * PAINEL_SEM_LOGIN=true: painel aberto, só para uso LOCAL (o servidor de dev escuta em 127.0.0.1).
- * Sem usuário, o servidor lê com a service role (que nunca vai ao navegador).
- * Recusado em produção para não publicar o painel aberto por engano.
+ * Sessão do painel: usuário logado (magic link) e a carteira dele. Tudo no painel usa a sessão do
+ * usuário (RLS), então ele só enxerga a própria carteira. Uma vez por requisição (cache).
  */
-export const SEM_LOGIN = process.env.PAINEL_SEM_LOGIN === 'true';
+export const sessaoPainel = cache(async () => {
+  const db = await supabaseServidor();
+  const {
+    data: { user },
+  } = await db.auth.getUser();
+  if (!user) redirect('/login');
+  const { data: membro } = await db.from('membros').select('carteira_id, carteiras(nome)').eq('user_id', user.id).maybeSingle();
+  if (!membro) redirect('/login?erro=sem_carteira');
+  return { db, user, carteiraId: membro.carteira_id, carteiraNome: membro.carteiras?.nome ?? '' };
+});
 
-if (SEM_LOGIN && process.env.NODE_ENV === 'production') {
-  throw new Error('PAINEL_SEM_LOGIN não é permitido em produção. Remova a variável e use o login por magic link.');
-}
-
-/** Cliente Supabase do painel: sessão do usuário (RLS) ou, sem login, service role no servidor. */
-export async function dbPainel(): Promise<Db> {
-  if (!SEM_LOGIN) return supabaseServidor();
-  const url = process.env.SUPABASE_URL;
-  const chave = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !chave) throw new Error('PAINEL_SEM_LOGIN exige SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY no .env');
-  return criarClienteServico(url, chave);
+/** Repositório da carteira do usuário logado. */
+export async function repoPainel(): Promise<Repositorio> {
+  const s = await sessaoPainel();
+  return new Repositorio(s.db, s.carteiraId);
 }

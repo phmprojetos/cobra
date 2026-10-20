@@ -15,9 +15,12 @@ class RepoMemoria {
   parcelas: ParcelaRow[] = [];
   private seq = 0;
   /** Só o necessário para planejarPagamento (consulta de renegociações). */
+  readonly carteiraId = 'c1';
   readonly db = {
     from: () => ({
-      select: () => ({ in: async (_c: string, ids: string[]) => ({ data: this.operacoes.filter((o) => ids.includes(o.id)), error: null }) }),
+      select: () => ({
+        eq: () => ({ in: async (_c: string, ids: string[]) => ({ data: this.operacoes.filter((o) => ids.includes(o.id)), error: null }) }),
+      }),
     }),
   };
   async carregarCarteira(filtro: { clienteId?: string; operacaoId?: string } = {}) {
@@ -66,6 +69,7 @@ class RepoMemoria {
       documento: c.documento.numero,
       created_at: agora,
       updated_at: agora,
+      carteira_id: 'c1',
     };
     this.clientes.push(row);
     return row;
@@ -272,11 +276,11 @@ describe('pagamento guiado: quem paga → qual contrato → quanto', () => {
   const op = (id: string, cliente: string, data: string, principal: number, total: number): OperacaoRow => ({
     id, cliente_id: cliente, data_emprestimo: data, valor_principal: principal, valor_total_receber: total, juros_total: total - principal,
     taxa_periodo: 0.3, taxa_efetiva_mensal: 0.1, tipo: 'parcelada', periodicidade: 'mensal', status: 'ativa', renegociacoes: 0, valor_prejuizo: 0,
-    perdida_em: null, cancelado_em: null, observacoes: null, origem: 'telegram', mensagem_origem_id: null, created_at: agora, updated_at: agora,
+    perdida_em: null, cancelado_em: null, observacoes: null, origem: 'telegram', mensagem_origem_id: null, created_at: agora, updated_at: agora, carteira_id: 'c1',
   });
   const par = (id: string, opId: string, numero: number, venc: string, valor: number, principal: number): ParcelaRow => ({
     id, operacao_id: opId, numero, vencimento: venc, valor, valor_principal: principal, valor_juros: valor - principal,
-    valor_pago: 0, principal_pago: 0, juros_pago: 0, status: 'aberta', cancelado_em: null, created_at: agora, updated_at: agora,
+    valor_pago: 0, principal_pago: 0, juros_pago: 0, status: 'aberta', cancelado_em: null, created_at: agora, updated_at: agora, carteira_id: 'c1',
   });
 
   montarPagamento = montar;

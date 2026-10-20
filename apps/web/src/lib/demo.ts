@@ -102,7 +102,10 @@ const PLANOS: Plano[] = [
   { cliente: 5, diasAtras: 1, principal: 60000, total: 72000, n: 1, periodicidade: 'mensal', primeiroEm: 1 },
 ];
 
-const REGRAS: Omit<RegraRow, 'id' | 'created_at' | 'updated_at'>[] = [
+/** Os dados de demonstração formam uma carteira única, só em memória. */
+const CARTEIRA_DEMO = 'demo';
+
+const REGRAS: Omit<RegraRow, 'id' | 'created_at' | 'updated_at' | 'carteira_id'>[] = [
   { tipo: 'lembrete_antes', offset_dias: 1, horario: '09:00:00', dia_semana: null, ativo: true, silenciar_clientes: [] },
   { tipo: 'no_dia', offset_dias: 0, horario: '09:00:00', dia_semana: null, ativo: true, silenciar_clientes: [] },
   { tipo: 'atraso', offset_dias: 1, horario: '10:00:00', dia_semana: null, ativo: true, silenciar_clientes: [] },
@@ -144,12 +147,13 @@ function paraRow(p: ParcelaEstado, criado: string): ParcelaRow {
     cancelado_em: null,
     created_at: criado,
     updated_at: criado,
+    carteira_id: CARTEIRA_DEMO,
   };
 }
 
 function evento(entidade: string, entidadeId: string, acao: string, payload: object, data: DataISO, mensagem: string | null = null): EventoRow {
   const em = `${data}T12:00:00.000Z`;
-  return { id: novoId('ev'), entidade, entidade_id: entidadeId, acao, payload: payload as EventoRow['payload'], mensagem_telegram: mensagem, created_at: em, updated_at: em };
+  return { id: novoId('ev'), entidade, entidade_id: entidadeId, acao, payload: payload as EventoRow['payload'], mensagem_telegram: mensagem, created_at: em, updated_at: em, carteira_id: CARTEIRA_DEMO };
 }
 
 function gerar(): Estado {
@@ -159,6 +163,7 @@ function gerar(): Estado {
   const criado = agoraIso();
   const clientes: ClienteRow[] = CLIENTES.map(([nome, apelidos, , extra], i) => ({
     id: novoId('cli'),
+    carteira_id: CARTEIRA_DEMO,
     nome,
     apelidos,
     documento_tipo: 'cpf',
@@ -170,7 +175,7 @@ function gerar(): Estado {
     updated_at: criado,
   }));
   const est: Estado = { config, clientes, operacoes: [], parcelas: [], pagamentos: [], eventos: [], regras: [] };
-  est.regras = REGRAS.map((r) => ({ ...r, id: novoId('regra'), created_at: criado, updated_at: criado }));
+  est.regras = REGRAS.map((r) => ({ ...r, id: novoId('regra'), carteira_id: CARTEIRA_DEMO, created_at: criado, updated_at: criado }));
 
   for (const pl of PLANOS) {
     const cli = clientes[pl.cliente]!;
@@ -210,6 +215,7 @@ function gerar(): Estado {
 
     const op: OperacaoRow = {
       id: opId,
+      carteira_id: CARTEIRA_DEMO,
       cliente_id: cli.id,
       data_emprestimo: dataEmp,
       valor_principal: pl.principal,
@@ -275,7 +281,7 @@ function registrarPagamentoInterno(est: Estado, opId: string, estados: ParcelaEs
     p.principalPago += a.principal;
     p.jurosPago += a.juros;
     const em = `${data}T12:00:00.000Z`;
-    est.pagamentos.push({ id: novoId('pag'), parcela_id: p.id, lote_id: lote, data, valor: a.valor, valor_principal_alocado: a.principal, valor_juros_alocado: a.juros, forma, observacoes: null, origem: 'telegram', cancelado_em: null, created_at: em, updated_at: em });
+    est.pagamentos.push({ id: novoId('pag'), parcela_id: p.id, lote_id: lote, data, valor: a.valor, valor_principal_alocado: a.principal, valor_juros_alocado: a.juros, forma, observacoes: null, origem: 'telegram', cancelado_em: null, created_at: em, updated_at: em, carteira_id: CARTEIRA_DEMO });
   }
   est.eventos.push(evento('operacao', opId, 'pagamento', { lote_id: lote, data, alocacoes: r.alocacoes }, data, forma === 'pix' ? null : `${valor / 100} recebido`));
   return r;
@@ -342,10 +348,10 @@ export const fonteDemo = {
   salvarConfig(c: Partial<Configuracao>) {
     Object.assign(estado().config, c);
   },
-  salvarRegra(id: string | null, dados: Omit<RegraRow, 'id' | 'created_at' | 'updated_at'>) {
+  salvarRegra(id: string | null, dados: Omit<RegraRow, 'id' | 'created_at' | 'updated_at' | 'carteira_id'>) {
     const e = estado();
     const agora = agoraIso();
     if (id) Object.assign(e.regras.find((r) => r.id === id)!, dados, { updated_at: agora });
-    else e.regras.push({ ...dados, id: novoId('regra'), created_at: agora, updated_at: agora });
+    else e.regras.push({ ...dados, id: novoId('regra'), carteira_id: CARTEIRA_DEMO, created_at: agora, updated_at: agora });
   },
 };

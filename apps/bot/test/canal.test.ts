@@ -3,7 +3,7 @@ import { CONFIG_PADRAO, paraOperacao, paraParcela, type CarteiraCompleta, type C
 import type { Bot } from 'grammy';
 import { describe, expect, it, vi } from 'vitest';
 import { Aplicacao } from '../src/aplicacao';
-import { criarBot, opcoesEnvio } from '../src/bot';
+import { acessoFixo, criarBot, opcoesEnvio } from '../src/bot';
 import { linkParcela, mensagemDevedoresDoDia, mensagemGrupoParcelas, mensagemNovoEmprestimo, mensagemVencemAmanha } from '../src/canal';
 import { Formatador } from '../src/formatacao';
 
@@ -12,17 +12,17 @@ const agora = '2026-10-20T00:00:00Z';
 const f = new Formatador(CONFIG_PADRAO);
 
 const cli = (id: string, nome: string, doc: string): ClienteRow => ({
-  id, nome, apelidos: [], documento_tipo: 'cpf', documento: doc, telefone: null, observacoes: null, ativo: true, created_at: agora, updated_at: agora,
+  id, nome, apelidos: [], documento_tipo: 'cpf', documento: doc, telefone: null, observacoes: null, ativo: true, created_at: agora, updated_at: agora, carteira_id: 'c1',
 });
 const op = (id: string, clienteId: string): OperacaoRow => ({
   id, cliente_id: clienteId, data_emprestimo: '2026-09-01', valor_principal: 100000, valor_total_receber: 130000, juros_total: 30000,
   taxa_periodo: 0.3, taxa_efetiva_mensal: 0.1, tipo: 'unica', periodicidade: null, status: 'ativa', renegociacoes: 0, valor_prejuizo: 0,
-  perdida_em: null, cancelado_em: null, observacoes: null, origem: 'telegram', mensagem_origem_id: null, created_at: agora, updated_at: agora,
+  perdida_em: null, cancelado_em: null, observacoes: null, origem: 'telegram', mensagem_origem_id: null, created_at: agora, updated_at: agora, carteira_id: 'c1',
 });
 const par = (id: string, opId: string, vencimento: string, pago = 0): ParcelaRow => ({
   id, operacao_id: opId, numero: 1, vencimento, valor: 130000, valor_principal: 100000, valor_juros: 30000,
   valor_pago: pago, principal_pago: Math.round((pago * 10) / 13), juros_pago: pago - Math.round((pago * 10) / 13),
-  status: 'aberta', cancelado_em: null, created_at: agora, updated_at: agora,
+  status: 'aberta', cancelado_em: null, created_at: agora, updated_at: agora, carteira_id: 'c1',
 });
 
 function carteira(parcelas: ParcelaRow[]): CarteiraCompleta {
@@ -135,7 +135,7 @@ describe('conexão do canal', () => {
     const enviar = vi.fn(async () => 1);
     const app = new Aplicacao(repo as unknown as Repositorio, { interpretar: async () => ({ tipo: 'falha', motivo: '' }) }, { info: () => {}, error: () => {} }, enviar);
     const enviados: { chat: number; texto: string }[] = [];
-    const bot = criarBot('1:T', app, [771585420], { info: () => {}, error: () => {} }) as Bot;
+    const bot = criarBot('1:T', acessoFixo(app, [771585420]), { info: () => {}, error: () => {} }) as unknown as Bot;
     bot.botInfo = { id: 1, is_bot: true, first_name: 'cobra', username: 'cobraphm_bot' } as Bot['botInfo'];
     bot.api.config.use(async (_prev, method, payload) => {
       if (method === 'sendMessage') enviados.push({ chat: (payload as { chat_id: number }).chat_id, texto: (payload as { text: string }).text });

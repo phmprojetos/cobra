@@ -73,20 +73,34 @@ export interface SessaoBot {
 
 export type Env = Partial<Record<'MOEDA' | 'LOCALE' | 'TIMEZONE', string | undefined>>;
 
+/**
+ * Acesso aos dados de UMA carteira. Toda leitura filtra por carteira_id e toda escrita o informa:
+ * o bot usa service_role (sem RLS), então o isolamento entre carteiras depende disso. No painel o
+ * RLS reforça o mesmo filtro.
+ */
 export class Repositorio {
   private cacheConfig: { valor: Configuracao; em: number } | null = null;
 
   constructor(
     readonly db: Db,
+    readonly carteiraId: string,
     private readonly env: Env = {},
     readonly relogio: () => Date = () => new Date(),
   ) {}
+
+  /** Chama uma RPC transacional informando a carteira (exigida quando o cliente é service_role). */
+  rpc<N extends 'rpc_criar_operacao' | 'rpc_registrar_pagamento' | 'rpc_renegociar_parcela' | 'rpc_marcar_perda' | 'rpc_cancelar_operacao' | 'rpc_atualizar_status' | 'rpc_renovar_parcela'>(
+    nome: N,
+    p: Record<string, unknown>,
+  ) {
+    return this.db.rpc(nome, { p: { ...p, carteira_id: this.carteiraId } as unknown as Json });
+  }
 
   // ───────────── configuração ─────────────
 
   async configuracao(): Promise<Configuracao> {
     if (this.cacheConfig && Date.now() - this.cacheConfig.em < 30_000) return this.cacheConfig.valor;
-    const linhas = ok(await this.db.from('configuracoes').select('chave, valor'));
+    const linhas = ok(await this.db.from('configuracoes').select('chave, valor').eq('carteira_id', this.carteiraId));
     const valor = montarConfiguracao(linhas, this.env);
     this.cacheConfig = { valor, em: Date.now() };
     return valor;
@@ -94,7 +108,7 @@ export class Repositorio {
 
   /** Define (ou remove, com null) o canal que recebe os alertas automáticos. */
   async salvarCanalAlertas(canal: { id: number; titulo: string } | null): Promise<void> {
-    semErro(await this.db.from('configuracoes').upsert({ chave: 'canal_alertas', valor: canal ?? false }));
+    semErro(await this.db.from('configuracoes').upsert({ carteira_id: this.carteiraId, chave: 'canal_alertas', valor: canal ?? false }));
     this.limparCacheConfig();
   }
 
@@ -109,17 +123,17 @@ export class Repositorio {
   // ───────────── clientes ─────────────
 
   async listarClientes(apenasAtivos = true): Promise<ClienteRow[]> {
-    let q = this.db.from('clientes').select('*').order('nome');
+    let q = this.db.from('clientes').select('*').eq('carteira_id', this.carteiraId).order('nome');
     if (apenasAtivos) q = q.eq('ativo', true);
     return ok(await q);
   }
 
   async cliente(id: string): Promise<ClienteRow | null> {
-    return okTalvez(await this.db.from('clientes').select('*').eq('id', id).maybeSingle());
+    return okTalvez(await this.db.from('clientes').select('*').eq('carteira_id', this.carteiraId).eq('id', id).maybeSingle());
   }
 
   async buscarClientes(termo: string, limite = 5) {
-    return ok(await this.db.rpc('buscar_clientes', { p_termo: termo, p_limite: limite }));
+    return ok(await this.db.rpc('buscar_clientes', { p_termo: termo, p_limite: limite, p_carteira: this.carteiraId }));
   }
 
   /** Cadastro exige nome + documento; o documento é único (chave contra duplicidade). */
@@ -133,6 +147,7 @@ export class Repositorio {
     const res = await this.db
       .from('clientes')
       .insert({
+        carteira_id: this.carteiraId,
         nome: c.nome.trim(),
         documento_tipo: c.documento.tipo,
         documento: c.documento.numero,
@@ -155,7 +170,7 @@ export class Repositorio {
   ): Promise<ClienteRow> {
     const { documento, ...resto } = patch;
     const dados = { ...resto, ...(documento ? { documento_tipo: documento.tipo, documento: documento.numero } : {}) };
-    const res = await this.db.from('clientes').update(dados).eq('id', id).select('*').single();
+    const res = await this.db.from('clientes').update(dados).eq('carteira_id', this.carteiraId).eq('id', id).select('*').single();
     if (res.error?.code === '23505') {
       throw new ErroRegra('documento_duplicado', 'Já existe outro cliente com este documento.');
     }
@@ -164,7 +179,7 @@ export class Repositorio {
 
   async clientePorDocumento(d: Documento): Promise<ClienteRow | null> {
     return okTalvez(
-      await this.db.from('clientes').select('*').eq('documento_tipo', d.tipo).eq('documento', d.numero).maybeSingle(),
+      await this.db.from('clientes').select('*').eq('carteira_id', this.carteiraId).eq('documento_tipo', d.tipo).eq('documento', d.numero).maybeSingle(),
     );
   }
 
@@ -175,7 +190,7 @@ export class Repositorio {
     if (!c || !novo) return;
     const ja = [c.nome, ...c.apelidos].some((n) => normalizarNome(n) === normalizarNome(novo));
     if (ja) return;
-    semErro(await this.db.from('clientes').update({ apelidos: [...c.apelidos, novo] }).eq('id', clienteId));
+    semErro(await this.db.from('clientes').update({ apelidos: [...c.apelidos, novo] }).eq('carteira_id', this.carteiraId).eq('id', clienteId));
   }
 
   // ───────────── documentos do cliente (Storage privado) ─────────────
@@ -202,10 +217,12 @@ export class Repositorio {
   }
 
   async registrarDocumento(d: { clienteId: string; caminho: string; nome: string; tipo: string; tamanho: number; origem?: 'web' | 'telegram' }) {
+    // carteira_id é herdada do cliente por trigger; aqui só se garante que o cliente é desta carteira.
+    if (!(await this.cliente(d.clienteId))) throw new ErroBanco('Cliente não encontrado');
     return ok(
       await this.db
         .from('cliente_documentos')
-        .insert({ cliente_id: d.clienteId, caminho: d.caminho, nome_arquivo: d.nome, tipo_mime: d.tipo, tamanho_bytes: d.tamanho, origem: d.origem ?? 'web' })
+        .insert({ carteira_id: this.carteiraId, cliente_id: d.clienteId, caminho: d.caminho, nome_arquivo: d.nome, tipo_mime: d.tipo, tamanho_bytes: d.tamanho, origem: d.origem ?? 'web' })
         .select('*')
         .single(),
     );
@@ -216,6 +233,7 @@ export class Repositorio {
       await this.db
         .from('cliente_documentos')
         .select('*')
+        .eq('carteira_id', this.carteiraId)
         .eq('cliente_id', clienteId)
         .is('removido_em', null)
         .order('created_at', { ascending: false }),
@@ -232,14 +250,14 @@ export class Repositorio {
 
   /** Remoção lógica: some da lista, o arquivo continua guardado. */
   async removerDocumento(id: string, clienteId: string): Promise<void> {
-    semErro(await this.db.from('cliente_documentos').update({ removido_em: new Date().toISOString() }).eq('id', id).eq('cliente_id', clienteId));
+    semErro(await this.db.from('cliente_documentos').update({ removido_em: new Date().toISOString() }).eq('carteira_id', this.carteiraId).eq('id', id).eq('cliente_id', clienteId));
   }
 
   // ───────────── carteira ─────────────
 
   /** Carrega operações (canceladas só por id), parcelas e pagamentos. Volume de um usuário cabe em memória. */
   async carregarCarteira(filtro: { clienteId?: string; operacaoId?: string } = {}): Promise<CarteiraCompleta> {
-    let qOps = this.db.from('operacoes').select('*');
+    let qOps = this.db.from('operacoes').select('*').eq('carteira_id', this.carteiraId);
     // Canceladas só entram quando a operação é pedida explicitamente (tela de detalhe).
     if (!filtro.operacaoId) qOps = qOps.neq('status', 'cancelada');
     if (filtro.clienteId) qOps = qOps.eq('cliente_id', filtro.clienteId);
@@ -248,13 +266,13 @@ export class Repositorio {
     const opIds = operacoes.map((o) => o.id);
 
     const [parcelas, clientes] = await Promise.all([
-      opIds.length ? this.emLotes(opIds, (ids) => this.db.from('parcelas').select('*').in('operacao_id', ids)) : [],
+      opIds.length ? this.emLotes(opIds, (ids) => this.db.from('parcelas').select('*').eq('carteira_id', this.carteiraId).in('operacao_id', ids)) : [],
       this.listarClientes(false),
     ]);
     const parIds = parcelas.map((p) => p.id);
     const pagamentos = parIds.length
       ? await this.emLotes(parIds, (ids) =>
-          this.db.from('pagamentos').select('*').in('parcela_id', ids).is('cancelado_em', null),
+          this.db.from('pagamentos').select('*').eq('carteira_id', this.carteiraId).in('parcela_id', ids).is('cancelado_em', null),
         )
       : [];
 
@@ -288,6 +306,7 @@ export class Repositorio {
       await this.db
         .from('eventos')
         .select('*')
+        .eq('carteira_id', this.carteiraId)
         .in('entidade_id', entidadeIds)
         .order('created_at', { ascending: false }),
     );
@@ -296,7 +315,7 @@ export class Repositorio {
   // ───────────── notificações ─────────────
 
   async regras(): Promise<RegraRow[]> {
-    return ok(await this.db.from('regras_notificacao').select('*').order('tipo').order('offset_dias'));
+    return ok(await this.db.from('regras_notificacao').select('*').eq('carteira_id', this.carteiraId).order('tipo').order('offset_dias'));
   }
 
   async chavesEnviadas(desde: DataISO): Promise<Set<string>> {
@@ -304,6 +323,7 @@ export class Repositorio {
       await this.db
         .from('notificacoes_enviadas')
         .select('regra_id, parcela_id, data_referencia')
+        .eq('carteira_id', this.carteiraId)
         .gte('data_referencia', desde),
     );
     return new Set(linhas.map((l) => chaveAlerta(l.regra_id, l.parcela_id, l.data_referencia)));
@@ -316,7 +336,7 @@ export class Repositorio {
   async reservarNotificacao(regraId: string, parcelaId: string | null, dataReferencia: DataISO): Promise<string | null> {
     const res = await this.db
       .from('notificacoes_enviadas')
-      .insert({ regra_id: regraId, parcela_id: parcelaId, data_referencia: dataReferencia })
+      .insert({ carteira_id: this.carteiraId, regra_id: regraId, parcela_id: parcelaId, data_referencia: dataReferencia })
       .select('id')
       .single();
     if (res.error?.code === '23505') return null;
@@ -324,11 +344,11 @@ export class Repositorio {
   }
 
   async confirmarNotificacao(id: string, telegramMessageId: number): Promise<void> {
-    semErro(await this.db.from('notificacoes_enviadas').update({ telegram_message_id: telegramMessageId }).eq('id', id));
+    semErro(await this.db.from('notificacoes_enviadas').update({ telegram_message_id: telegramMessageId }).eq('carteira_id', this.carteiraId).eq('id', id));
   }
 
   async liberarNotificacao(id: string): Promise<void> {
-    semErro(await this.db.from('notificacoes_enviadas').delete().eq('id', id));
+    semErro(await this.db.from('notificacoes_enviadas').delete().eq('carteira_id', this.carteiraId).eq('id', id));
   }
 
   // ───────────── sessões do bot ─────────────
@@ -395,11 +415,6 @@ export class Repositorio {
         .select('id'),
     );
     return r.length > 0;
-  }
-
-  async limparSessoesExpiradas(): Promise<void> {
-    const limite = new Date(this.relogio().getTime() - 7 * 86_400_000).toISOString();
-    semErro(await this.db.from('sessoes_bot').delete().lt('expira_em', limite));
   }
 
   private paraSessao(r: {

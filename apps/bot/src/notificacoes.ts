@@ -184,6 +184,6 @@ export async function executarJobNotificacoes(
       for (const id of reservas) await repo.liberarNotificacao(id);
     }
   }
-  if (enviados || falhas || statusAtualizados) log.info({ statusAtualizados, enviados, falhas, destino: canal ? 'canal' : 'privado' }, 'job de notificações');
+  if (enviados || falhas || statusAtualizados) log.info({ carteira: repo.carteiraId, statusAtualizados, enviados, falhas, destino: canal ? 'canal' : 'privado' }, 'job de notificações');
   return { statusAtualizados, enviados, falhas };
 }

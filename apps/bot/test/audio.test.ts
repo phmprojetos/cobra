@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Bot } from 'grammy';
 import type { Aplicacao } from '../src/aplicacao';
-import { criarBot, type OpcoesAudio } from '../src/bot';
+import { acessoFixo, criarBot, type OpcoesAudio } from '../src/bot';
 import { TranscritorGroq, type Transcritor } from '../src/ia/transcricao';
 
 const U = 771585420;
@@ -10,7 +10,7 @@ const silencioso = { info: () => {}, error: () => {} };
 /** Bot com a API do Telegram interceptada: registra mensagens enviadas. */
 function montar(audio: OpcoesAudio | undefined, app: Partial<Aplicacao>) {
   const enviados: string[] = [];
-  const bot = criarBot('123:TESTE', app as Aplicacao, [U], silencioso, audio) as Bot;
+  const bot = criarBot('123:TESTE', acessoFixo(app as Aplicacao, [U]), silencioso, audio) as unknown as Bot;
   bot.botInfo = { id: 1, is_bot: true, first_name: 'cobra', username: 'cobra_bot' } as Bot['botInfo'];
   bot.api.config.use(async (_prev, method, payload) => {
     if (method === 'sendMessage') enviados.push((payload as { text: string }).text);

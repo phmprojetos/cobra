@@ -7,14 +7,14 @@ export type Database = {
           Tables: {
             "cliente_documentos": {
                   Row: {
-                    "caminho": string,"cliente_id": string,"created_at": string,"id": string,"nome_arquivo": string,"origem": Database["public"]['Enums']["origem_lancamento"],"removido_em": string | null,"tamanho_bytes": number,"tipo_mime": string,"updated_at": string
+                    "carteira_id": string,"caminho": string,"cliente_id": string,"created_at": string,"id": string,"nome_arquivo": string,"origem": Database["public"]['Enums']["origem_lancamento"],"removido_em": string | null,"tamanho_bytes": number,"tipo_mime": string,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "caminho": string,"cliente_id": string,"created_at"?: string,"id"?: string,"nome_arquivo": string,"origem"?: Database["public"]['Enums']["origem_lancamento"],"removido_em"?: string | null,"tamanho_bytes": number,"tipo_mime": string,"updated_at"?: string
+                    "carteira_id": string,"caminho": string,"cliente_id": string,"created_at"?: string,"id"?: string,"nome_arquivo": string,"origem"?: Database["public"]['Enums']["origem_lancamento"],"removido_em"?: string | null,"tamanho_bytes": number,"tipo_mime": string,"updated_at"?: string
                   }
                   Update: {
-                    "caminho"?: string,"cliente_id"?: string,"created_at"?: string,"id"?: string,"nome_arquivo"?: string,"origem"?: Database["public"]['Enums']["origem_lancamento"],"removido_em"?: string | null,"tamanho_bytes"?: number,"tipo_mime"?: string,"updated_at"?: string
+                    "carteira_id"?: string,"caminho"?: string,"cliente_id"?: string,"created_at"?: string,"id"?: string,"nome_arquivo"?: string,"origem"?: Database["public"]['Enums']["origem_lancamento"],"removido_em"?: string | null,"tamanho_bytes"?: number,"tipo_mime"?: string,"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -27,56 +27,56 @@ isOneToOne: false
                   ]
                 },"clientes": {
                   Row: {
-                    "apelidos": (string)[],"ativo": boolean,"created_at": string,"documento": string | null,"documento_tipo": Database["public"]['Enums']["tipo_documento"] | null,"id": string,"nome": string,"observacoes": string | null,"telefone": string | null,"updated_at": string
+                    "carteira_id": string,"apelidos": (string)[],"ativo": boolean,"created_at": string,"documento": string | null,"documento_tipo": Database["public"]['Enums']["tipo_documento"] | null,"id": string,"nome": string,"observacoes": string | null,"telefone": string | null,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "apelidos"?: (string)[],"ativo"?: boolean,"created_at"?: string,"documento"?: string | null,"documento_tipo"?: Database["public"]['Enums']["tipo_documento"] | null,"id"?: string,"nome": string,"observacoes"?: string | null,"telefone"?: string | null,"updated_at"?: string
+                    "carteira_id"?: string,"apelidos"?: (string)[],"ativo"?: boolean,"created_at"?: string,"documento"?: string | null,"documento_tipo"?: Database["public"]['Enums']["tipo_documento"] | null,"id"?: string,"nome": string,"observacoes"?: string | null,"telefone"?: string | null,"updated_at"?: string
                   }
                   Update: {
-                    "apelidos"?: (string)[],"ativo"?: boolean,"created_at"?: string,"documento"?: string | null,"documento_tipo"?: Database["public"]['Enums']["tipo_documento"] | null,"id"?: string,"nome"?: string,"observacoes"?: string | null,"telefone"?: string | null,"updated_at"?: string
+                    "carteira_id"?: string,"apelidos"?: (string)[],"ativo"?: boolean,"created_at"?: string,"documento"?: string | null,"documento_tipo"?: Database["public"]['Enums']["tipo_documento"] | null,"id"?: string,"nome"?: string,"observacoes"?: string | null,"telefone"?: string | null,"updated_at"?: string
                   }
                   Relationships: [
                     
                   ]
                 },"configuracoes": {
                   Row: {
-                    "chave": string,"created_at": string,"updated_at": string,"valor": NonNullable<Json>
+                    "carteira_id": string,"chave": string,"created_at": string,"updated_at": string,"valor": NonNullable<Json>
                   }
                   ComputedFields: never
                   Insert: {
-                    "chave": string,"created_at"?: string,"updated_at"?: string,"valor": NonNullable<Json>
+                    "carteira_id"?: string,"chave": string,"created_at"?: string,"updated_at"?: string,"valor": NonNullable<Json>
                   }
                   Update: {
-                    "chave"?: string,"created_at"?: string,"updated_at"?: string,"valor"?: NonNullable<Json>
+                    "carteira_id"?: string,"chave"?: string,"created_at"?: string,"updated_at"?: string,"valor"?: NonNullable<Json>
                   }
                   Relationships: [
                     
                   ]
                 },"eventos": {
                   Row: {
-                    "acao": string,"created_at": string,"entidade": string,"entidade_id": string,"id": string,"mensagem_telegram": string | null,"payload": NonNullable<Json>,"updated_at": string
+                    "carteira_id": string,"acao": string,"created_at": string,"entidade": string,"entidade_id": string,"id": string,"mensagem_telegram": string | null,"payload": NonNullable<Json>,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "acao": string,"created_at"?: string,"entidade": string,"entidade_id": string,"id"?: string,"mensagem_telegram"?: string | null,"payload"?: NonNullable<Json>,"updated_at"?: string
+                    "carteira_id"?: string,"acao": string,"created_at"?: string,"entidade": string,"entidade_id": string,"id"?: string,"mensagem_telegram"?: string | null,"payload"?: NonNullable<Json>,"updated_at"?: string
                   }
                   Update: {
-                    "acao"?: string,"created_at"?: string,"entidade"?: string,"entidade_id"?: string,"id"?: string,"mensagem_telegram"?: string | null,"payload"?: NonNullable<Json>,"updated_at"?: string
+                    "carteira_id"?: string,"acao"?: string,"created_at"?: string,"entidade"?: string,"entidade_id"?: string,"id"?: string,"mensagem_telegram"?: string | null,"payload"?: NonNullable<Json>,"updated_at"?: string
                   }
                   Relationships: [
                     
                   ]
                 },"notificacoes_enviadas": {
                   Row: {
-                    "created_at": string,"data_referencia": string,"enviada_em": string,"id": string,"parcela_id": string | null,"regra_id": string,"telegram_message_id": number | null,"updated_at": string
+                    "carteira_id": string,"created_at": string,"data_referencia": string,"enviada_em": string,"id": string,"parcela_id": string | null,"regra_id": string,"telegram_message_id": number | null,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"data_referencia": string,"enviada_em"?: string,"id"?: string,"parcela_id"?: string | null,"regra_id": string,"telegram_message_id"?: number | null,"updated_at"?: string
+                    "carteira_id": string,"created_at"?: string,"data_referencia": string,"enviada_em"?: string,"id"?: string,"parcela_id"?: string | null,"regra_id": string,"telegram_message_id"?: number | null,"updated_at"?: string
                   }
                   Update: {
-                    "created_at"?: string,"data_referencia"?: string,"enviada_em"?: string,"id"?: string,"parcela_id"?: string | null,"regra_id"?: string,"telegram_message_id"?: number | null,"updated_at"?: string
+                    "carteira_id"?: string,"created_at"?: string,"data_referencia"?: string,"enviada_em"?: string,"id"?: string,"parcela_id"?: string | null,"regra_id"?: string,"telegram_message_id"?: number | null,"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -95,14 +95,14 @@ isOneToOne: false
                   ]
                 },"operacoes": {
                   Row: {
-                    "cancelado_em": string | null,"cliente_id": string,"created_at": string,"data_emprestimo": string,"id": string,"juros_total": number,"mensagem_origem_id": number | null,"observacoes": string | null,"origem": Database["public"]['Enums']["origem_lancamento"],"perdida_em": string | null,"periodicidade": Database["public"]['Enums']["periodicidade"] | null,"renegociacoes": number,"status": Database["public"]['Enums']["status_operacao"],"taxa_efetiva_mensal": number,"taxa_periodo": number,"tipo": Database["public"]['Enums']["tipo_operacao"],"updated_at": string,"valor_prejuizo": number,"valor_principal": number,"valor_total_receber": number
+                    "carteira_id": string,"cancelado_em": string | null,"cliente_id": string,"created_at": string,"data_emprestimo": string,"id": string,"juros_total": number,"mensagem_origem_id": number | null,"observacoes": string | null,"origem": Database["public"]['Enums']["origem_lancamento"],"perdida_em": string | null,"periodicidade": Database["public"]['Enums']["periodicidade"] | null,"renegociacoes": number,"status": Database["public"]['Enums']["status_operacao"],"taxa_efetiva_mensal": number,"taxa_periodo": number,"tipo": Database["public"]['Enums']["tipo_operacao"],"updated_at": string,"valor_prejuizo": number,"valor_principal": number,"valor_total_receber": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "cancelado_em"?: string | null,"cliente_id": string,"created_at"?: string,"data_emprestimo": string,"id"?: string,"juros_total": number,"mensagem_origem_id"?: number | null,"observacoes"?: string | null,"origem": Database["public"]['Enums']["origem_lancamento"],"perdida_em"?: string | null,"periodicidade"?: Database["public"]['Enums']["periodicidade"] | null,"renegociacoes"?: number,"status"?: Database["public"]['Enums']["status_operacao"],"taxa_efetiva_mensal": number,"taxa_periodo": number,"tipo": Database["public"]['Enums']["tipo_operacao"],"updated_at"?: string,"valor_prejuizo"?: number,"valor_principal": number,"valor_total_receber": number
+                    "carteira_id": string,"cancelado_em"?: string | null,"cliente_id": string,"created_at"?: string,"data_emprestimo": string,"id"?: string,"juros_total": number,"mensagem_origem_id"?: number | null,"observacoes"?: string | null,"origem": Database["public"]['Enums']["origem_lancamento"],"perdida_em"?: string | null,"periodicidade"?: Database["public"]['Enums']["periodicidade"] | null,"renegociacoes"?: number,"status"?: Database["public"]['Enums']["status_operacao"],"taxa_efetiva_mensal": number,"taxa_periodo": number,"tipo": Database["public"]['Enums']["tipo_operacao"],"updated_at"?: string,"valor_prejuizo"?: number,"valor_principal": number,"valor_total_receber": number
                   }
                   Update: {
-                    "cancelado_em"?: string | null,"cliente_id"?: string,"created_at"?: string,"data_emprestimo"?: string,"id"?: string,"juros_total"?: number,"mensagem_origem_id"?: number | null,"observacoes"?: string | null,"origem"?: Database["public"]['Enums']["origem_lancamento"],"perdida_em"?: string | null,"periodicidade"?: Database["public"]['Enums']["periodicidade"] | null,"renegociacoes"?: number,"status"?: Database["public"]['Enums']["status_operacao"],"taxa_efetiva_mensal"?: number,"taxa_periodo"?: number,"tipo"?: Database["public"]['Enums']["tipo_operacao"],"updated_at"?: string,"valor_prejuizo"?: number,"valor_principal"?: number,"valor_total_receber"?: number
+                    "carteira_id"?: string,"cancelado_em"?: string | null,"cliente_id"?: string,"created_at"?: string,"data_emprestimo"?: string,"id"?: string,"juros_total"?: number,"mensagem_origem_id"?: number | null,"observacoes"?: string | null,"origem"?: Database["public"]['Enums']["origem_lancamento"],"perdida_em"?: string | null,"periodicidade"?: Database["public"]['Enums']["periodicidade"] | null,"renegociacoes"?: number,"status"?: Database["public"]['Enums']["status_operacao"],"taxa_efetiva_mensal"?: number,"taxa_periodo"?: number,"tipo"?: Database["public"]['Enums']["tipo_operacao"],"updated_at"?: string,"valor_prejuizo"?: number,"valor_principal"?: number,"valor_total_receber"?: number
                   }
                   Relationships: [
                     {
@@ -115,14 +115,14 @@ isOneToOne: false
                   ]
                 },"pagamentos": {
                   Row: {
-                    "cancelado_em": string | null,"created_at": string,"data": string,"forma": string | null,"id": string,"lote_id": string,"observacoes": string | null,"origem": Database["public"]['Enums']["origem_lancamento"],"parcela_id": string,"updated_at": string,"valor": number,"valor_juros_alocado": number,"valor_principal_alocado": number
+                    "carteira_id": string,"cancelado_em": string | null,"created_at": string,"data": string,"forma": string | null,"id": string,"lote_id": string,"observacoes": string | null,"origem": Database["public"]['Enums']["origem_lancamento"],"parcela_id": string,"updated_at": string,"valor": number,"valor_juros_alocado": number,"valor_principal_alocado": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "cancelado_em"?: string | null,"created_at"?: string,"data": string,"forma"?: string | null,"id"?: string,"lote_id": string,"observacoes"?: string | null,"origem": Database["public"]['Enums']["origem_lancamento"],"parcela_id": string,"updated_at"?: string,"valor": number,"valor_juros_alocado": number,"valor_principal_alocado": number
+                    "carteira_id": string,"cancelado_em"?: string | null,"created_at"?: string,"data": string,"forma"?: string | null,"id"?: string,"lote_id": string,"observacoes"?: string | null,"origem": Database["public"]['Enums']["origem_lancamento"],"parcela_id": string,"updated_at"?: string,"valor": number,"valor_juros_alocado": number,"valor_principal_alocado": number
                   }
                   Update: {
-                    "cancelado_em"?: string | null,"created_at"?: string,"data"?: string,"forma"?: string | null,"id"?: string,"lote_id"?: string,"observacoes"?: string | null,"origem"?: Database["public"]['Enums']["origem_lancamento"],"parcela_id"?: string,"updated_at"?: string,"valor"?: number,"valor_juros_alocado"?: number,"valor_principal_alocado"?: number
+                    "carteira_id"?: string,"cancelado_em"?: string | null,"created_at"?: string,"data"?: string,"forma"?: string | null,"id"?: string,"lote_id"?: string,"observacoes"?: string | null,"origem"?: Database["public"]['Enums']["origem_lancamento"],"parcela_id"?: string,"updated_at"?: string,"valor"?: number,"valor_juros_alocado"?: number,"valor_principal_alocado"?: number
                   }
                   Relationships: [
                     {
@@ -135,14 +135,14 @@ isOneToOne: false
                   ]
                 },"parcelas": {
                   Row: {
-                    "cancelado_em": string | null,"created_at": string,"id": string,"juros_pago": number,"numero": number,"operacao_id": string,"principal_pago": number,"status": Database["public"]['Enums']["status_parcela"],"updated_at": string,"valor": number,"valor_juros": number,"valor_pago": number,"valor_principal": number,"vencimento": string
+                    "carteira_id": string,"cancelado_em": string | null,"created_at": string,"id": string,"juros_pago": number,"numero": number,"operacao_id": string,"principal_pago": number,"status": Database["public"]['Enums']["status_parcela"],"updated_at": string,"valor": number,"valor_juros": number,"valor_pago": number,"valor_principal": number,"vencimento": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "cancelado_em"?: string | null,"created_at"?: string,"id"?: string,"juros_pago"?: number,"numero": number,"operacao_id": string,"principal_pago"?: number,"status"?: Database["public"]['Enums']["status_parcela"],"updated_at"?: string,"valor": number,"valor_juros": number,"valor_pago"?: number,"valor_principal": number,"vencimento": string
+                    "carteira_id": string,"cancelado_em"?: string | null,"created_at"?: string,"id"?: string,"juros_pago"?: number,"numero": number,"operacao_id": string,"principal_pago"?: number,"status"?: Database["public"]['Enums']["status_parcela"],"updated_at"?: string,"valor": number,"valor_juros": number,"valor_pago"?: number,"valor_principal": number,"vencimento": string
                   }
                   Update: {
-                    "cancelado_em"?: string | null,"created_at"?: string,"id"?: string,"juros_pago"?: number,"numero"?: number,"operacao_id"?: string,"principal_pago"?: number,"status"?: Database["public"]['Enums']["status_parcela"],"updated_at"?: string,"valor"?: number,"valor_juros"?: number,"valor_pago"?: number,"valor_principal"?: number,"vencimento"?: string
+                    "carteira_id"?: string,"cancelado_em"?: string | null,"created_at"?: string,"id"?: string,"juros_pago"?: number,"numero"?: number,"operacao_id"?: string,"principal_pago"?: number,"status"?: Database["public"]['Enums']["status_parcela"],"updated_at"?: string,"valor"?: number,"valor_juros"?: number,"valor_pago"?: number,"valor_principal"?: number,"vencimento"?: string
                   }
                   Relationships: [
                     {
@@ -155,14 +155,14 @@ isOneToOne: false
                   ]
                 },"regras_notificacao": {
                   Row: {
-                    "ativo": boolean,"created_at": string,"dia_semana": number | null,"horario": string,"id": string,"offset_dias": number,"silenciar_clientes": (string)[],"tipo": Database["public"]['Enums']["tipo_regra_notificacao"],"updated_at": string
+                    "carteira_id": string,"ativo": boolean,"created_at": string,"dia_semana": number | null,"horario": string,"id": string,"offset_dias": number,"silenciar_clientes": (string)[],"tipo": Database["public"]['Enums']["tipo_regra_notificacao"],"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "ativo"?: boolean,"created_at"?: string,"dia_semana"?: number | null,"horario": string,"id"?: string,"offset_dias"?: number,"silenciar_clientes"?: (string)[],"tipo": Database["public"]['Enums']["tipo_regra_notificacao"],"updated_at"?: string
+                    "carteira_id"?: string,"ativo"?: boolean,"created_at"?: string,"dia_semana"?: number | null,"horario": string,"id"?: string,"offset_dias"?: number,"silenciar_clientes"?: (string)[],"tipo": Database["public"]['Enums']["tipo_regra_notificacao"],"updated_at"?: string
                   }
                   Update: {
-                    "ativo"?: boolean,"created_at"?: string,"dia_semana"?: number | null,"horario"?: string,"id"?: string,"offset_dias"?: number,"silenciar_clientes"?: (string)[],"tipo"?: Database["public"]['Enums']["tipo_regra_notificacao"],"updated_at"?: string
+                    "carteira_id"?: string,"ativo"?: boolean,"created_at"?: string,"dia_semana"?: number | null,"horario"?: string,"id"?: string,"offset_dias"?: number,"silenciar_clientes"?: (string)[],"tipo"?: Database["public"]['Enums']["tipo_regra_notificacao"],"updated_at"?: string
                   }
                   Relationships: [
                     
@@ -181,17 +181,103 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"carteiras": {
+                  Row: {
+                    "id": string,"nome": string,"created_at": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "id"?: string,"nome": string,"created_at"?: string,"updated_at"?: string
+                  }
+                  Update: {
+                    "id"?: string,"nome"?: string,"created_at"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"codigos_vinculo": {
+                  Row: {
+                    "carteira_id": string,"codigo": string,"expira_em": string,"usado_em": string | null,"user_id": string,"created_at": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "carteira_id": string,"codigo": string,"expira_em": string,"usado_em"?: string | null,"user_id": string,"created_at"?: string,"updated_at"?: string
+                  }
+                  Update: {
+                    "carteira_id"?: string,"codigo"?: string,"expira_em"?: string,"usado_em"?: string | null,"user_id"?: string,"created_at"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "codigos_vinculo_carteira_id_fkey"
+      columns: ["carteira_id"]
+isOneToOne: false
+      referencedRelation: "carteiras"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"membros": {
+                  Row: {
+                    "carteira_id": string,"email": string,"user_id": string,"created_at": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "carteira_id": string,"email": string,"user_id": string,"created_at"?: string,"updated_at"?: string
+                  }
+                  Update: {
+                    "carteira_id"?: string,"email"?: string,"user_id"?: string,"created_at"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "membros_carteira_id_fkey"
+      columns: ["carteira_id"]
+isOneToOne: false
+      referencedRelation: "carteiras"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"vinculos_telegram": {
+                  Row: {
+                    "carteira_id": string,"nome": string | null,"telegram_user_id": number,"user_id": string | null,"created_at": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "carteira_id": string,"nome"?: string | null,"telegram_user_id": number,"user_id"?: string | null,"created_at"?: string,"updated_at"?: string
+                  }
+                  Update: {
+                    "carteira_id"?: string,"nome"?: string | null,"telegram_user_id"?: number,"user_id"?: string | null,"created_at"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "vinculos_telegram_carteira_id_fkey"
+      columns: ["carteira_id"]
+isOneToOne: false
+      referencedRelation: "carteiras"
+      referencedColumns: ["id"]
+    }
+                  ]
                 }
           }
           Views: {
             [_ in never]: never
           }
           Functions: {
-            "_exigir_autenticado":
-{ Args: Record<PropertyKey, never>; Returns: undefined
+            "_carteira":
+{ Args: { "p": Json }; Returns: string
+                           },
+"criar_carteira":
+{ Args: { "p_nome": string }; Returns: string
+                           },
+"gerar_codigo_vinculo":
+{ Args: Record<PropertyKey, never>; Returns: string
+                           },
+"minha_carteira":
+{ Args: Record<PropertyKey, never>; Returns: string
+                           },
+"vincular_telegram":
+{ Args: { "p_codigo": string,"p_nome": string,"p_telegram_user_id": number }; Returns: string
                            },
 "buscar_clientes":
-{ Args: { "p_limite"?: number,"p_termo": string }; Returns: {
+{ Args: { "p_carteira"?: string,"p_limite"?: number,"p_termo": string }; Returns: {
               "apelidos": (string)[],"documento": string,"documento_tipo": Database["public"]['Enums']["tipo_documento"],"id": string,"nome": string,"similaridade": number
             }[]
                            },
