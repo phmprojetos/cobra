@@ -1,6 +1,5 @@
 import { LogOut } from 'lucide-react';
 import { Suspense } from 'react';
-import { FiltroPeriodo } from '@/components/filtro-periodo';
 import { Navegacao } from '@/components/navegacao';
 import { AlternarTema } from '@/components/tema';
 import { Button } from '@/components/ui/button';

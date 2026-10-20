@@ -1,0 +1,29 @@
+# Produção (VPS): bot em modo webhook + Caddy com HTTPS automático.
+# Uso: defina BOT_DOMINIO no .env e rode `docker compose up -d --build`.
+services:
+  bot:
+    build:
+      context: .
+      dockerfile: apps/bot/Dockerfile
+    env_file: .env
+    environment:
+      BOT_MODO: webhook
+      PORT: 8080
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2.10-alpine
+    ports:
+      - '80:80'
+      - '443:443'
+    environment:
+      BOT_DOMINIO: ${BOT_DOMINIO:?defina BOT_DOMINIO no .env}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on:
+      - bot
+    restart: unless-stopped
+
+volumes:
+  caddy_data:

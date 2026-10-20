@@ -1,0 +1,4 @@
+{$BOT_DOMINIO} {
+	encode gzip
+	reverse_proxy bot:8080
+}
