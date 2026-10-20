@@ -107,68 +107,42 @@ As frases de exemplo do produto estão em `apps/bot/test/fixtures.ts`. Elas serv
 
 ## Deploy
 
-Tudo numa VPS com Docker: **painel + bot + Caddy** (HTTPS automático) num domínio só.
+Produção numa VPS com Docker: **painel + bot** num domínio só. Os containers escutam só no localhost; o HTTPS fica com o proxy da VPS.
 
-| Endereço | Serviço |
-|---|---|
-| `https://DOMINIO/` | painel |
-| `https://DOMINIO/telegram` | webhook do bot (registrado no Telegram automaticamente ao subir) |
+| Endereço | Serviço | Container |
+|---|---|---|
+| `https://DOMINIO/` | painel | `127.0.0.1:3100` (`WEB_PORTA`) |
+| `https://DOMINIO/telegram` | webhook do bot (registrado no Telegram ao subir) | `127.0.0.1:8090` (`BOT_PORTA`) |
 
-O agendador de alertas roda dentro do bot (`NOTIFICACOES_CRON=true`). `/health` e `/jobs` não ficam expostos.
+O agendador de alertas roda dentro do bot (`NOTIFICACOES_CRON=true`). `/health` e `/jobs` não são expostos.
 
-### 1. Preparar a VPS (uma vez)
+### Instalação atual (VPS 85.209.92.229, nginx compartilhado com outros sites)
 
-```bash
-curl -fsSL https://get.docker.com | sh     # Docker + compose
-ufw allow 22 && ufw allow 80 && ufw allow 443 && ufw enable   # se usar ufw
-```
+- Código: `/var/www/cobra` (clone de `/var/www/cobra.git`; na sua máquina, remote `vps`).
+- `.env` de produção: `/var/www/cobra/.env` (sem credenciais diretas do banco; migrations rodam da sua máquina).
+- nginx: `/etc/nginx/sites-available/cobraphm.duckdns.org` (modelo em `deploy/nginx/cobra.conf`) + certbot.
 
-O domínio precisa apontar para o IP da VPS (DuckDNS: `cobraphm.duckdns.org → IP`).
-
-### 2. Enviar o código
-
-Sem repositório remoto, copie da sua máquina (sem `node_modules`/builds):
+**Atualizar:**
 
 ```bash
-rsync -az --exclude node_modules --exclude .next --exclude .next-build --exclude dist --exclude coverage \
-  ./ root@IP_DA_VPS:/opt/cobra/
+git push vps HEAD:main
+ssh root@85.209.92.229 'cd /var/www/cobra && git pull -q && docker compose up -d --build'
 ```
 
-### 3. `.env` de produção (em `/opt/cobra/.env`)
+Migrations: `pnpm db:push` da sua máquina, **antes** de subir código que dependa delas.
 
-Parta do `.env` local e ajuste:
+### Em outra VPS
 
 ```bash
-DOMINIO=cobraphm.duckdns.org
-NEXT_PUBLIC_SITE_URL=https://cobraphm.duckdns.org
-TELEGRAM_WEBHOOK_SECRET=<openssl rand -hex 32>
-NOTIFICACOES_CRON=true
+curl -fsSL https://get.docker.com | sh
+git clone <repo> /var/www/cobra && cd /var/www/cobra
+# .env: DOMINIO, NEXT_PUBLIC_SITE_URL=https://DOMINIO, TELEGRAM_WEBHOOK_SECRET=$(openssl rand -hex 32), NOTIFICACOES_CRON=true
 ```
 
-(`BOT_MODO`, `PORT` e `TELEGRAM_WEBHOOK_URL` são definidos pelo `docker-compose.yml`.)
+- **Com nginx**: `docker compose up -d --build`, depois instale `deploy/nginx/cobra.conf` e rode `certbot --nginx -d DOMINIO`.
+- **VPS vazia**: `docker compose --profile caddy up -d --build` (Caddy nas portas 80/443, HTTPS automático).
 
-### 4. Subir
-
-```bash
-cd /opt/cobra
-docker compose up -d --build
-docker compose logs -f bot     # deve mostrar "webhook registrado"
-```
-
-### 5. Supabase e Telegram
-
-- **Authentication → URL Configuration**: *Site URL* = `https://DOMINIO`; em *Redirect URLs*, `https://DOMINIO/auth/callback`.
-- **Pare o bot local** (`pnpm dev`): em modo polling ele apaga o webhook de produção ao iniciar.
-- Conferir o webhook: `pnpm --filter @cobra/bot webhook:info`.
-
-### Atualizar
-
-```bash
-rsync ... (mesmo comando do passo 2)
-ssh root@IP_DA_VPS 'cd /opt/cobra && docker compose up -d --build'
-```
-
-Migrations continuam sendo aplicadas da sua máquina: `pnpm db:push`.
+Depois, em ambos: no Supabase (**Authentication → URL Configuration**) defina *Site URL* = `https://DOMINIO` e adicione `https://DOMINIO/auth/callback` às *Redirect URLs*. **Não rode o bot local** (`pnpm dev`) com o mesmo token: em polling ele apaga o webhook de produção.
 
 Endpoints do bot:
 
