@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizarNome, parseDataCurta, resolverCliente } from '../src';
+import { mascararTelefone, normalizarNome, parseDataCurta, resolverCliente, telefoneValido } from '../src';
 
 const hoje = '2026-10-20';
 
@@ -63,5 +63,35 @@ describe('resolverCliente', () => {
   it('inexistente', () => {
     expect(resolverCliente('Zé', clientes).tipo).toBe('nenhum');
     expect(resolverCliente('  ', clientes).tipo).toBe('nenhum');
+  });
+});
+
+describe('máscara de telefone', () => {
+  it.each([
+    ['', ''],
+    ['1', '(1'],
+    ['11', '(11'],
+    ['119', '(11) 9'],
+    ['1199999', '(11) 9999-9'],
+    ['1133334444', '(11) 3333-4444'],
+    ['11999990000', '(11) 99999-0000'],
+    ['(11) 99999-0000', '(11) 99999-0000'],
+    ['119999900001234', '(11) 99999-0000'], // corta o excesso
+    ['5511999990000', '+55 (11) 99999-0000'],
+    ['+55 11 3333-4444', '+55 (11) 3333-4444'],
+    ['551', '(55) 1'], // DDD 55 (RS) não é confundido com DDI
+    ['abc', ''],
+  ])('%s → %s', (entrada, saida) => expect(mascararTelefone(entrada)).toBe(saida));
+
+  it('é idempotente (reaplicar não muda)', () => {
+    for (const t of ['(11) 99999-0000', '+55 (11) 3333-4444', '(11) 9999']) expect(mascararTelefone(mascararTelefone(t))).toBe(mascararTelefone(t));
+  });
+
+  it('validade', () => {
+    expect(telefoneValido('(11) 99999-0000')).toBe(true);
+    expect(telefoneValido('(11) 3333-4444')).toBe(true);
+    expect(telefoneValido('+55 (11) 99999-0000')).toBe(true);
+    expect(telefoneValido('(11) 9999')).toBe(false);
+    expect(telefoneValido('')).toBe(false);
   });
 });

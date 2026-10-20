@@ -101,3 +101,31 @@ export function resolverCliente<T extends ClienteParaResolver>(
   if (parciais.length > 1) return { tipo: 'ambiguo', opcoes: parciais };
   return { tipo: 'nenhum' };
 }
+
+/**
+ * Máscara de telefone brasileiro, aplicada enquanto se digita (aceita parcial):
+ * (11) 99999-9999 · (11) 3333-4444 · +55 (11) 99999-9999.
+ */
+export function mascararTelefone(texto: string): string {
+  let d = texto.replace(/\D/g, '');
+  let ddi = '';
+  if (d.length > 11 && d.startsWith('55')) {
+    ddi = '+55 ';
+    d = d.slice(2);
+  }
+  d = d.slice(0, 11);
+  if (d.length === 0) return ddi.trim();
+  if (d.length <= 2) return `${ddi}(${d}`;
+  const ddd = `(${d.slice(0, 2)}) `;
+  const resto = d.slice(2);
+  // Celular (9 dígitos após o DDD) usa 5-4; fixo usa 4-4.
+  const corte = resto.length > 8 ? 5 : 4;
+  return resto.length <= corte ? `${ddi}${ddd}${resto}` : `${ddi}${ddd}${resto.slice(0, corte)}-${resto.slice(corte)}`;
+}
+
+/** Telefone completo? (DDD + 8 ou 9 dígitos, com ou sem +55) */
+export function telefoneValido(texto: string): boolean {
+  const d = texto.replace(/\D/g, '');
+  const local = d.length > 11 && d.startsWith('55') ? d.slice(2) : d;
+  return local.length === 10 || local.length === 11;
+}

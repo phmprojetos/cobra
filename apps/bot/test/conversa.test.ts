@@ -234,10 +234,10 @@ describe('documento repetido com outro nome e /editar', () => {
 
     await app.callback(U, `ec:${repo.clientes[0]!.id}:telefone`);
     const inval = await app.mensagem(U, '12');
-    expect(textos(inval)).toContain('Telefone inválido');
+    expect(textos(inval)).toContain('Telefone incompleto');
     const c2 = await app.mensagem(U, '+55 81 99999-0000');
     await app.callback(U, botao(c2, 'ok:')!.dados);
-    expect(repo.clientes[0]!.telefone).toBe('+55 81 99999-0000');
+    expect(repo.clientes[0]!.telefone).toBe('+55 (81) 99999-0000');
 
     await app.callback(U, `ec:${repo.clientes[0]!.id}:apelidos`);
     const c3 = await app.mensagem(U, 'nenhum');

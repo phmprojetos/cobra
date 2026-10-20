@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useActionState } from 'react';
+import { useActionState, useState } from 'react';
+import { mascararTelefone } from '@cobra/core';
 import { AlertTriangle, Loader2, Save } from 'lucide-react';
 import { salvarCliente, type EstadoCliente } from '@/app/(painel)/clientes/acoes';
 import { Button } from '@/components/ui/button';
@@ -17,6 +18,12 @@ export interface ValoresCliente {
   telefone?: string;
   apelidos?: string;
   observacoes?: string;
+}
+
+/** Telefone com máscara aplicada enquanto se digita: (11) 99999-9999. */
+function TelefoneInput({ valorInicial, ...props }: { valorInicial?: string | undefined } & Omit<React.ComponentProps<typeof Input>, 'value' | 'onChange' | 'defaultValue'>) {
+  const [valor, setValor] = useState(mascararTelefone(valorInicial ?? ''));
+  return <Input {...props} value={valor} onChange={(e) => setValor(mascararTelefone(e.target.value))} inputMode="tel" autoComplete="tel" maxLength={19} />;
 }
 
 function Campo({ id, rotulo, obrigatorio, erro, dica, children }: { id: string; rotulo: string; obrigatorio?: boolean; erro?: string; dica?: string; children: React.ReactNode }) {
@@ -99,7 +106,7 @@ export function FormularioCliente({ valores = {}, cancelarHref }: { valores?: Va
         </Campo>
 
         <Campo id="telefone" rotulo="Telefone" erro={e.telefone}>
-          <Input id="telefone" name="telefone" defaultValue={val.telefone} inputMode="tel" placeholder="+55 11 99999-0000" {...invalido('telefone')} />
+          <TelefoneInput id="telefone" name="telefone" valorInicial={val.telefone} placeholder="(11) 99999-9999" {...invalido('telefone')} />
         </Campo>
 
         <div className="md:col-span-2">

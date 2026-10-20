@@ -1,6 +1,6 @@
 'use server';
 
-import { ErroRegra, parseDocumento, type Documento } from '@cobra/core';
+import { ErroRegra, mascararTelefone, parseDocumento, telefoneValido, type Documento } from '@cobra/core';
 import { Repositorio } from '@cobra/db';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
@@ -39,9 +39,9 @@ function ler(form: FormData): { dados: Dados } | { estado: EstadoCliente } {
   if (!/^[\p{L}][\p{L}\s.'-]{1,80}$/u.test(nome)) campos.nome = 'Informe o nome completo (só letras).';
   const doc = numero ? parseDocumento(tipo === 'auto' ? numero : `${tipo} ${numero}`) : { erro: 'Informe o documento.' };
   if ('erro' in doc) campos.documento = doc.erro.replace(/<[^>]+>/g, '');
-  if (telefone && (telefone.replace(/\D/g, '').length < 8 || telefone.length > 30)) campos.telefone = 'Telefone inválido.';
+  if (telefone && !telefoneValido(telefone)) campos.telefone = 'Telefone incompleto: DDD + número, ex.: (11) 99999-9999.';
   if (Object.keys(campos).length || 'erro' in doc) return { estado: { campos } };
-  return { dados: { nome, documento: doc, telefone: telefone || null, apelidos, observacoes: observacoes || null } };
+  return { dados: { nome, documento: doc, telefone: telefone ? mascararTelefone(telefone) : null, apelidos, observacoes: observacoes || null } };
 }
 
 export async function salvarCliente(anterior: EstadoCliente | null, form: FormData): Promise<EstadoCliente> {

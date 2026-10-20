@@ -1,6 +1,8 @@
 import {
   AJUDA_DOCUMENTO,
   diferencaDias,
+  mascararTelefone,
+  telefoneValido,
   normalizarNome,
   ErroRegra,
   formatarDocumento,
@@ -1311,8 +1313,8 @@ export class Aplicacao {
         break;
       }
       case 'telefone':
-        if (!vazio && (t.replace(/\D/g, '').length < 8 || t.length > 30)) return erro('Telefone inválido.');
-        valor = vazio ? null : t;
+        if (!vazio && !telefoneValido(t)) return erro('Telefone incompleto: DDD + número, ex.: (11) 99999-9999.');
+        valor = vazio ? null : mascararTelefone(t);
         [antes, depois] = [c.telefone ?? '', valor ?? ''];
         break;
       case 'observacoes':
