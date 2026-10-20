@@ -21,11 +21,11 @@ function Dica({ active, payload }: TooltipContentProps<ValueType, NameType>) {
     <div className="bg-popover text-popover-foreground rounded-lg border px-3 py-2 text-xs shadow-md">
       <div className="mb-1 font-medium">Semana de {p.rotulo}</div>
       <div className="flex items-center gap-2">
-        <span className="bg-em-dia size-2 rounded-sm" aria-hidden /> Em dia: <span className="ml-auto tabular-nums">{p.emDiaFmt}</span>
+        <span className="bg-em-dia-fill size-2 rounded-sm" aria-hidden /> Em dia: <span className="ml-auto tabular-nums">{p.emDiaFmt}</span>
       </div>
       {p.vencido > 0 && (
         <div className="flex items-center gap-2">
-          <span className="bg-atraso size-2 rounded-sm" aria-hidden /> Vencido não pago: <span className="ml-auto tabular-nums">{p.vencidoFmt}</span>
+          <span className="bg-atraso-fill size-2 rounded-sm" aria-hidden /> Vencido não pago: <span className="ml-auto tabular-nums">{p.vencidoFmt}</span>
         </div>
       )}
       <div className="mt-1 border-t pt-1">
@@ -63,8 +63,9 @@ export function GraficoFluxo({ dados, moeda, locale, linkBase }: { dados: PontoF
             dataKey="vencido"
             name="Vencido não pago"
             stackId="s"
-            fill="var(--atraso)"
-            stroke="var(--background)"
+            isAnimationActive={false}
+            fill="var(--atraso-fill)"
+            stroke="var(--card)"
             strokeWidth={2}
             className="cursor-pointer"
             onClick={(d) => ir(d.payload as PontoFluxo, 'vencido')}
@@ -73,8 +74,9 @@ export function GraficoFluxo({ dados, moeda, locale, linkBase }: { dados: PontoF
             dataKey="emDia"
             name="Em dia"
             stackId="s"
-            fill="var(--em-dia)"
-            stroke="var(--background)"
+            isAnimationActive={false}
+            fill="var(--em-dia-fill)"
+            stroke="var(--card)"
             strokeWidth={2}
             radius={[4, 4, 0, 0]}
             className="cursor-pointer"

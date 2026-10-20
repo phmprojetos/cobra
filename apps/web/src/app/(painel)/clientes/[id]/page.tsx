@@ -1,8 +1,11 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { ArrowLeft, Banknote, CalendarX2, FileText, Gauge, HandCoins, Wallet } from 'lucide-react';
 import { formatarDocumento, metricasCliente } from '@cobra/core';
+import { Avatar, BarraProgresso, KpiCard, Secao, tomPontualidade, Vazio } from '@/components/painel/ui';
 import { StatusBadge } from '@/components/status';
 import { carregarPainel, saldoOperacao } from '@/lib/painel';
+import { cn } from '@/lib/utils';
 
 export default async function Cliente({ params }: PageProps<'/clientes/[id]'>) {
   const { id } = await params;
@@ -12,63 +15,74 @@ export default async function Cliente({ params }: PageProps<'/clientes/[id]'>) {
   if (!cliente) notFound();
   const m = metricasCliente(c.carteira, id, hoje);
   const ops = `/operacoes?cliente=${id}&p=tudo`;
-
-  const cards: [string, string, string?][] = [
-    ['Saldo atual', fmt.dinheiro(m.saldoAtual), `${m.operacoesEmAberto} em aberto`],
-    ['Total emprestado', fmt.dinheiro(m.totalEmprestado), `${m.operacoes} operação(ões)`],
-    ['Pago em dia', m.percentualPagoEmDia === null ? '—' : fmt.pct(m.percentualPagoEmDia), 'das parcelas vencidas ou pagas'],
-    ['Atraso médio', m.atrasoMedioDias === null ? '—' : `${m.atrasoMedioDias.toFixed(1)} dias`, `${m.renegociacoes} renegociação(ões)`],
-  ];
+  const atrasado = c.operacoes.some((o) => o.status === 'atrasada');
+  const pont = tomPontualidade(m.percentualPagoEmDia);
 
   return (
     <>
-      <div className="space-y-1">
-        <Link href="/clientes" className="text-muted-foreground text-sm hover:underline">
-          ← Clientes
+      <div className="space-y-4">
+        <Link href="/clientes" className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-sm">
+          <ArrowLeft className="size-4" /> Clientes
         </Link>
-        <h1 className="text-xl font-semibold tracking-tight">{cliente.nome}</h1>
-        <p className="text-muted-foreground text-sm">
-          {[
-            formatarDocumento(cliente.documento_tipo, cliente.documento),
-            cliente.apelidos.length ? `apelidos: ${cliente.apelidos.join(', ')}` : null,
-            cliente.telefone,
-            cliente.observacoes,
-          ]
-            .filter(Boolean)
-            .join(' · ') || 'Sem observações'}
-        </p>
+        <div className="flex flex-wrap items-center gap-4">
+          <Avatar nome={cliente.nome} tom={atrasado ? 'atraso' : m.saldoAtual > 0 ? 'em-dia' : 'pago'} />
+          <div>
+            <h1 className="flex items-center gap-3 text-2xl font-semibold tracking-tight">
+              {cliente.nome}
+              {atrasado && <StatusBadge status="atrasada" />}
+            </h1>
+            <p className="text-muted-foreground text-sm">
+              {[formatarDocumento(cliente.documento_tipo, cliente.documento), cliente.apelidos.length ? `apelidos: ${cliente.apelidos.join(', ')}` : null, cliente.telefone, cliente.observacoes]
+                .filter(Boolean)
+                .join(' · ')}
+            </p>
+          </div>
+        </div>
       </div>
 
-      <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {cards.map(([r, v, d]) => (
-          <Link key={r} href={ops} className="hover:bg-muted/50 rounded-xl border p-3">
-            <div className="text-muted-foreground text-xs">{r}</div>
-            <div className="text-lg font-semibold tabular-nums">{v}</div>
-            {d && <div className="text-muted-foreground text-xs">{d}</div>}
-          </Link>
-        ))}
+      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <KpiCard rotulo="Saldo em aberto" valor={fmt.dinheiro(m.saldoAtual)} href={ops} icone={Wallet} tom={atrasado ? 'atraso' : m.saldoAtual ? 'em-dia' : 'pago'} corValor={atrasado} detalhe={`${m.operacoesEmAberto} contrato(s) em aberto`} />
+        <KpiCard rotulo="Total emprestado" valor={fmt.dinheiro(m.totalEmprestado)} href={ops} icone={Banknote} detalhe={`${m.operacoes} contrato(s) no total`} />
+        <KpiCard rotulo="Total recebido" valor={fmt.dinheiro(m.totalRecebido)} href={ops} icone={HandCoins} tom="pago" corValor />
+        <KpiCard
+          rotulo="Pago em dia"
+          valor={m.percentualPagoEmDia === null ? '—' : fmt.pct(m.percentualPagoEmDia)}
+          href={ops}
+          icone={m.atrasoMedioDias ? CalendarX2 : Gauge}
+          tom={pont}
+          corValor
+          detalhe={`atraso médio ${m.atrasoMedioDias === null ? '—' : `${m.atrasoMedioDias.toFixed(1)} dias`} · ${m.renegociacoes} renegociação(ões)`}
+        />
       </section>
 
-      <section className="space-y-2">
-        <h2 className="font-medium">Operações</h2>
+      <Secao titulo="Contratos" semPadding>
         {c.operacoes.length === 0 ? (
-          <p className="text-muted-foreground text-sm">Nenhuma operação.</p>
+          <Vazio icone={FileText} titulo="Nenhum contrato" />
         ) : (
-          <ul className="divide-y rounded-xl border">
-            {c.operacoes.map((o) => (
-              <li key={o.id}>
-                <Link href={`/operacoes/${o.id}`} className="hover:bg-muted/50 flex flex-wrap items-center gap-3 p-3">
-                  <span className="min-w-0 flex-1 text-sm">
-                    {fmt.data(o.data_emprestimo)} · {fmt.dinheiro(o.valor_principal)} → {fmt.dinheiro(o.valor_total_receber)}
-                  </span>
-                  <StatusBadge status={o.status} />
-                  <span className="w-28 text-right font-semibold tabular-nums">{fmt.dinheiro(saldoOperacao(c, o.id))}</span>
-                </Link>
-              </li>
-            ))}
+          <ul className="divide-y">
+            {c.operacoes.map((o) => {
+              const saldo = saldoOperacao(c, o.id);
+              const pago = c.parcelas.filter((p) => p.operacao_id === o.id).reduce((a, p) => a + p.valor_pago, 0);
+              const total = c.parcelas.filter((p) => p.operacao_id === o.id && p.status !== 'cancelada').reduce((a, p) => a + p.valor, 0);
+              return (
+                <li key={o.id}>
+                  <Link href={`/operacoes/${o.id}`} className="hover:bg-muted/40 grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-2 px-5 py-3 transition-colors sm:grid-cols-[1fr_10rem_auto_auto]">
+                    <span className="text-sm">
+                      <span className="font-medium">{fmt.data(o.data_emprestimo)}</span>
+                      <span className="text-muted-foreground block text-xs tabular-nums">
+                        {fmt.dinheiro(o.valor_principal)} → {fmt.dinheiro(o.valor_total_receber)}
+                      </span>
+                    </span>
+                    <BarraProgresso pago={pago} total={total} atrasado={o.status === 'atrasada'} className="hidden sm:flex" />
+                    <StatusBadge status={o.status} />
+                    <span className={cn('w-28 text-right font-semibold tabular-nums', saldo === 0 ? 'text-pago' : o.status === 'atrasada' ? 'text-atraso' : '')}>{fmt.dinheiro(saldo)}</span>
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
         )}
-      </section>
+      </Secao>
     </>
   );
 }

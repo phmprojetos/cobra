@@ -1,10 +1,11 @@
 import Link from 'next/link';
+import { AlertTriangle, CalendarRange, TrendingUp } from 'lucide-react';
 import { fluxoProjetado } from '@cobra/core';
 import { Cabecalho } from '@/components/cabecalho';
 import { GraficoFluxo, type PontoFluxo } from '@/components/grafico-fluxo';
-import { Card, CardContent } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { KpiCard, Secao } from '@/components/painel/ui';
 import { carregarPainel, comPeriodo, type SearchParams } from '@/lib/painel';
+import { cn } from '@/lib/utils';
 
 export default async function Fluxo({ searchParams }: PageProps<'/fluxo'>) {
   const sp = (await searchParams) as SearchParams;
@@ -20,62 +21,80 @@ export default async function Fluxo({ searchParams }: PageProps<'/fluxo'>) {
     totalFmt: fmt.dinheiro(s.emDia + s.vencido),
   }));
   const base = `/operacoes${comPeriodo(sp, {})}`;
-  const total = semanas.reduce((a, s) => a + s.emDia + s.vencido, 0);
+  const link = (s: string, parte: string) => `${base}${base.includes('?') ? '&' : '?'}semana=${s}&parte=${parte}`;
+  const emDia = semanas.reduce((a, s) => a + s.emDia, 0);
+  const vencido = semanas.reduce((a, s) => a + s.vencido, 0);
+  const pico = semanas.reduce((m, s) => (s.emDia + s.vencido > m.emDia + m.vencido ? s : m), semanas[0]!);
 
   return (
     <>
-      <Cabecalho titulo="Fluxo projetado" />
-      <p className="text-muted-foreground text-sm">
-        Próximas 8 semanas (segunda a domingo) · total {fmt.dinheiro(total)}. O vencido não pago aparece na semana atual.
-      </p>
-      <Card>
-        <CardContent className="space-y-3 pt-2">
+      <Cabecalho titulo="Fluxo de caixa projetado" subtitulo="Próximas 8 semanas (segunda a domingo). O vencido não pago aparece na semana atual." />
+
+      <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <KpiCard rotulo="A receber em dia" valor={fmt.dinheiro(emDia)} href={link(semanas[0]!.inicio, 'emdia')} icone={TrendingUp} tom="em-dia" detalhe="nas próximas 8 semanas" />
+        <KpiCard rotulo="Vencido não pago" valor={fmt.dinheiro(vencido)} href={link(semanas[0]!.inicio, 'vencido')} icone={AlertTriangle} tom={vencido ? 'atraso' : 'pago'} corValor detalhe={vencido ? 'cobrar nesta semana' : 'nenhum atraso'} />
+        <KpiCard rotulo="Semana com mais entradas" valor={fmt.dinheiro(pico.emDia + pico.vencido)} href={link(pico.inicio, 'emdia')} icone={CalendarRange} detalhe={`${fmt.dataCurta(pico.inicio)} a ${fmt.dataCurta(pico.fim)}`} />
+      </section>
+
+      <Secao
+        titulo="Entradas por semana"
+        acao={
           <div className="flex gap-4 text-xs" aria-label="Legenda">
             <span className="flex items-center gap-1.5">
-              <span className="bg-em-dia size-2.5 rounded-sm" aria-hidden /> Em dia
+              <span className="bg-em-dia-fill size-2.5 rounded-sm" aria-hidden /> Em dia
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="bg-atraso size-2.5 rounded-sm" aria-hidden /> Vencido não pago
+              <span className="bg-atraso-fill size-2.5 rounded-sm" aria-hidden /> Vencido não pago
             </span>
           </div>
-          <GraficoFluxo dados={dados} moeda={config.moeda} locale={config.locale} linkBase={base} />
-        </CardContent>
-      </Card>
+        }
+      >
+        <GraficoFluxo dados={dados} moeda={config.moeda} locale={config.locale} linkBase={base} />
+      </Secao>
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Semana</TableHead>
-            <TableHead className="text-right">Em dia</TableHead>
-            <TableHead className="text-right">Vencido</TableHead>
-            <TableHead className="text-right">Total</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {semanas.map((s) => (
-            <TableRow key={s.inicio}>
-              <TableCell>
-                {fmt.dataCurta(s.inicio)} – {fmt.dataCurta(s.fim)}
-              </TableCell>
-              <TableCell className="text-right tabular-nums">
-                <Link className="hover:underline" href={`${base}${base.includes('?') ? '&' : '?'}semana=${s.inicio}&parte=emdia`}>
-                  {fmt.dinheiro(s.emDia)}
-                </Link>
-              </TableCell>
-              <TableCell className="text-right tabular-nums">
-                {s.vencido > 0 ? (
-                  <Link className="text-atraso hover:underline" href={`${base}${base.includes('?') ? '&' : '?'}semana=${s.inicio}&parte=vencido`}>
-                    {fmt.dinheiro(s.vencido)}
-                  </Link>
-                ) : (
-                  '—'
-                )}
-              </TableCell>
-              <TableCell className="text-right font-medium tabular-nums">{fmt.dinheiro(s.emDia + s.vencido)}</TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+      <Secao titulo="Detalhamento" semPadding>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-muted-foreground border-b text-left text-xs uppercase tracking-wide">
+                <th className="px-5 py-3 font-medium">Semana</th>
+                <th className="px-3 py-3 text-right font-medium">Em dia</th>
+                <th className="px-3 py-3 text-right font-medium">Vencido</th>
+                <th className="px-5 py-3 text-right font-medium">Total</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {semanas.map((s, i) => (
+                <tr key={s.inicio} className={cn('hover:bg-muted/40', i === 0 && 'bg-muted/30')}>
+                  <td className="px-5 py-3">
+                    {fmt.dataCurta(s.inicio)} – {fmt.dataCurta(s.fim)}
+                    {i === 0 && <span className="text-muted-foreground ml-2 text-xs">esta semana</span>}
+                  </td>
+                  <td className="px-3 py-3 text-right tabular-nums">
+                    {s.emDia ? (
+                      <Link className="text-em-dia hover:underline" href={link(s.inicio, 'emdia')}>
+                        {fmt.dinheiro(s.emDia)}
+                      </Link>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-3 text-right tabular-nums">
+                    {s.vencido > 0 ? (
+                      <Link className="text-atraso font-medium hover:underline" href={link(s.inicio, 'vencido')}>
+                        {fmt.dinheiro(s.vencido)}
+                      </Link>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </td>
+                  <td className={cn('px-5 py-3 text-right tabular-nums', s.emDia + s.vencido ? 'font-semibold' : 'text-muted-foreground')}>{fmt.dinheiro(s.emDia + s.vencido)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Secao>
     </>
   );
 }

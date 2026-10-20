@@ -1,21 +1,22 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { saldoParcela, somarDias } from '@cobra/core';
+import { ArrowLeft, CheckCircle2, Clock, HandCoins, History, RefreshCw, XCircle, Ban, FilePlus2, CalendarClock } from 'lucide-react';
+import { diferencaDias, formatarDocumento, saldoParcela, somarDias } from '@cobra/core';
 import { paraParcela } from '@cobra/db';
 import { DialogoPagamento } from '@/components/dialogo-pagamento';
+import { Avatar, BarraProgresso, Dinheiro, Secao, Vazio } from '@/components/painel/ui';
 import { StatusBadge } from '@/components/status';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { carregarPainel } from '@/lib/painel';
+import { cn } from '@/lib/utils';
 
-const ACOES: Record<string, string> = {
-  criar: 'Empréstimo registrado',
-  pagamento: 'Pagamento',
-  prorrogar: 'Prorrogação',
-  renegociar: 'Renegociação',
-  perda: 'Marcada como perda',
-  renovar: 'Renovação (pagou os juros)',
-  cancelar: 'Cancelada',
+const ACOES: Record<string, { rotulo: string; icone: typeof Clock; cor: string }> = {
+  criar: { rotulo: 'Empréstimo registrado', icone: FilePlus2, cor: 'text-em-dia bg-em-dia-fill/12' },
+  pagamento: { rotulo: 'Pagamento recebido', icone: HandCoins, cor: 'text-pago bg-pago-fill/12' },
+  prorrogar: { rotulo: 'Prorrogação', icone: CalendarClock, cor: 'text-breve bg-breve-fill/14' },
+  renegociar: { rotulo: 'Renegociação', icone: RefreshCw, cor: 'text-breve bg-breve-fill/14' },
+  renovar: { rotulo: 'Renovação (pagou os juros)', icone: RefreshCw, cor: 'text-pago bg-pago-fill/12' },
+  perda: { rotulo: 'Marcada como perda', icone: XCircle, cor: 'text-atraso bg-atraso-fill/12' },
+  cancelar: { rotulo: 'Cancelada', icone: Ban, cor: 'text-muted-foreground bg-muted' },
 };
 
 export default async function Operacao({ params }: PageProps<'/operacoes/[id]'>) {
@@ -29,103 +30,146 @@ export default async function Operacao({ params }: PageProps<'/operacoes/[id]'>)
   const eventos = await repo.eventos([op.id, ...parcelas.map((p) => p.id)]);
   const pagamentos = [...c.pagamentos].sort((a, b) => (a.data < b.data ? 1 : -1));
   const saldo = parcelas.reduce((a, p) => a + saldoParcela(paraParcela(p)).total, 0);
+  const recebido = parcelas.reduce((a, p) => a + p.valor_pago, 0);
+  const totalPrevisto = parcelas.filter((p) => p.status !== 'cancelada').reduce((a, p) => a + p.valor, 0);
+  const jurosRecebidos = pagamentos.reduce((a, p) => a + p.valor_juros_alocado, 0);
   const aberta = ['ativa', 'atrasada', 'renegociada'].includes(op.status);
+  const atrasada = op.status === 'atrasada';
 
   return (
     <>
-      <div className="space-y-1">
-        <Link href="/operacoes" className="text-muted-foreground text-sm hover:underline">
-          ← Operações
+      <div className="space-y-4">
+        <Link href="/operacoes" className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-sm">
+          <ArrowLeft className="size-4" /> Operações
         </Link>
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-xl font-semibold tracking-tight">
-            <Link href={`/clientes/${op.cliente_id}`} className="hover:underline">
-              {cliente?.nome}
-            </Link>
-          </h1>
-          <StatusBadge status={op.status} />
+        <div className="flex flex-wrap items-center gap-4">
+          <Avatar nome={cliente?.nome ?? '?'} tom={atrasada || op.status === 'perdida' ? 'atraso' : op.status === 'quitada' ? 'pago' : 'em-dia'} />
+          <div className="min-w-0 flex-1">
+            <h1 className="flex flex-wrap items-center gap-3 text-2xl font-semibold tracking-tight">
+              <Link href={`/clientes/${op.cliente_id}`} className="hover:underline">
+                {cliente?.nome}
+              </Link>
+              <StatusBadge status={op.status} />
+            </h1>
+            <p className="text-muted-foreground text-sm">
+              {formatarDocumento(cliente?.documento_tipo ?? null, cliente?.documento ?? null)} · empréstimo de {fmt.data(op.data_emprestimo)} ·{' '}
+              {op.tipo === 'unica' ? 'parcela única' : `${parcelas.length} parcelas ${op.periodicidade ?? ''}`}
+              {op.renegociacoes > 0 ? ` · ${op.renegociacoes} renegociação(ões)` : ''}
+            </p>
+          </div>
         </div>
       </div>
 
-      <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {[
-          ['Emprestado', fmt.dinheiro(op.valor_principal), fmt.data(op.data_emprestimo)],
-          ['A receber', fmt.dinheiro(op.valor_total_receber), `juros ${fmt.dinheiro(op.juros_total)}`],
-          ['Taxa efetiva', `${fmt.pct(Number(op.taxa_efetiva_mensal))} a.m.`, `${fmt.pct(Number(op.taxa_periodo))} no período`],
-          ['Saldo', fmt.dinheiro(saldo), op.status === 'perdida' ? `prejuízo ${fmt.dinheiro(op.valor_prejuizo)}` : `${op.renegociacoes} renegociação(ões)`],
-        ].map(([r, v, d]) => (
-          <div key={r} className="rounded-xl border p-3">
-            <div className="text-muted-foreground text-xs">{r}</div>
-            <div className="text-lg font-semibold tabular-nums">{v}</div>
-            <div className="text-muted-foreground text-xs">{d}</div>
+          { r: 'Emprestado', v: fmt.dinheiro(op.valor_principal), cls: '', d: `taxa ${fmt.pct(Number(op.taxa_efetiva_mensal))} a.m.` },
+          { r: 'Total previsto', v: fmt.dinheiro(totalPrevisto), cls: '', d: `juros ${fmt.dinheiro(totalPrevisto - op.valor_principal)}` },
+          { r: 'Recebido', v: fmt.dinheiro(recebido), cls: 'text-pago', d: `juros recebidos ${fmt.dinheiro(jurosRecebidos)}` },
+          {
+            r: op.status === 'perdida' ? 'Prejuízo' : 'Em aberto',
+            v: op.status === 'perdida' ? `−${fmt.dinheiro(op.valor_prejuizo)}` : fmt.dinheiro(saldo),
+            cls: op.status === 'perdida' || atrasada ? 'text-atraso' : saldo === 0 ? 'text-pago' : '',
+            d: saldo === 0 && op.status !== 'perdida' ? 'quitado' : atrasada ? 'com atraso' : 'a receber',
+          },
+        ].map((x) => (
+          <div key={x.r} className="bg-card rounded-xl border p-4 shadow-xs">
+            <div className="text-muted-foreground text-sm">{x.r}</div>
+            <div className={cn('mt-1 text-xl font-semibold tabular-nums', x.cls)}>{x.v}</div>
+            <div className="text-muted-foreground mt-0.5 text-xs">{x.d}</div>
           </div>
         ))}
       </section>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Parcelas</CardTitle>
-        </CardHeader>
-        <CardContent className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>#</TableHead>
-                <TableHead>Vencimento</TableHead>
-                <TableHead className="text-right">Valor</TableHead>
-                <TableHead className="text-right">Pago</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
+      <div className="bg-card rounded-xl border p-4 shadow-xs">
+        <div className="mb-2 flex items-center justify-between text-sm">
+          <span className="font-medium">Quitação do contrato</span>
+          <span className="text-muted-foreground tabular-nums">
+            <span className="text-pago font-medium">{fmt.dinheiro(recebido)}</span> de {fmt.dinheiro(totalPrevisto)}
+          </span>
+        </div>
+        <BarraProgresso pago={recebido} total={totalPrevisto} atrasado={atrasada} />
+      </div>
+
+      <Secao titulo="Parcelas" semPadding>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-muted-foreground border-b text-left text-xs uppercase tracking-wide">
+                <th className="px-5 py-3 font-medium">#</th>
+                <th className="px-3 py-3 font-medium">Vencimento</th>
+                <th className="px-3 py-3 text-right font-medium">Valor</th>
+                <th className="hidden px-3 py-3 text-right font-medium sm:table-cell">Pago</th>
+                <th className="px-3 py-3 text-right font-medium">Em aberto</th>
+                <th className="px-3 py-3 font-medium">Status</th>
+                <th className="px-5 py-3" />
+              </tr>
+            </thead>
+            <tbody className="divide-y">
               {parcelas.map((p) => {
                 const s = saldoParcela(paraParcela(p)).total;
                 const breve = s > 0 && p.vencimento >= hoje && p.vencimento <= somarDias(hoje, 3);
+                const atraso = s > 0 && p.vencimento < hoje ? diferencaDias(p.vencimento, hoje) : 0;
                 return (
-                  <TableRow key={p.id}>
-                    <TableCell>{p.numero}</TableCell>
-                    <TableCell>{fmt.data(p.vencimento)}</TableCell>
-                    <TableCell className="text-right tabular-nums">
+                  <tr key={p.id} className="hover:bg-muted/40">
+                    <td className="text-muted-foreground px-5 py-3 tabular-nums">{p.numero}</td>
+                    <td className="px-3 py-3 whitespace-nowrap">
+                      <span className={atraso ? 'text-atraso font-medium' : breve ? 'text-breve font-medium' : ''}>{fmt.data(p.vencimento)}</span>
+                      {atraso > 0 && <span className="text-atraso block text-xs">{atraso} dia(s) de atraso</span>}
+                    </td>
+                    <td className="px-3 py-3 text-right tabular-nums">
                       {fmt.dinheiro(p.valor)}
-                      <div className="text-muted-foreground text-xs">
+                      <span className="text-muted-foreground block text-xs">
                         P {fmt.dinheiro(p.valor_principal)} · J {fmt.dinheiro(p.valor_juros)}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">{fmt.dinheiro(p.valor_pago)}</TableCell>
-                    <TableCell>
+                      </span>
+                    </td>
+                    <td className="hidden px-3 py-3 text-right tabular-nums sm:table-cell">
+                      {p.valor_pago > 0 ? <span className="text-pago font-medium">{fmt.dinheiro(p.valor_pago)}</span> : <span className="text-muted-foreground">—</span>}
+                    </td>
+                    <td className={cn('px-3 py-3 text-right font-semibold tabular-nums', s === 0 ? 'text-pago' : atraso ? 'text-atraso' : '')}>{s === 0 ? '✓' : fmt.dinheiro(s)}</td>
+                    <td className="px-3 py-3">
                       <StatusBadge status={breve && p.status !== 'atrasada' ? 'breve' : p.status} />
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {aberta && s > 0 && (
-                        <DialogoPagamento parcelaId={p.id} cliente={cliente?.nome ?? ''} saldo={s} saldoFormatado={fmt.dinheiro(s)} hoje={hoje} />
-                      )}
-                    </TableCell>
-                  </TableRow>
+                    </td>
+                    <td className="px-5 py-3 text-right">
+                      {aberta && s > 0 && <DialogoPagamento parcelaId={p.id} cliente={cliente?.nome ?? ''} saldo={s} saldoFormatado={fmt.dinheiro(s)} hoje={hoje} />}
+                    </td>
+                  </tr>
                 );
               })}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+            </tbody>
+          </table>
+        </div>
+      </Secao>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Pagamentos</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <Secao
+          titulo={
+            <span className="flex items-center gap-2">
+              <HandCoins className="text-pago size-4" aria-hidden /> Pagamentos
+            </span>
+          }
+          descricao={`${pagamentos.length} pagamento(s) · ${fmt.dinheiro(recebido)}`}
+          semPadding
+        >
           {pagamentos.length === 0 ? (
-            <p className="text-muted-foreground text-sm">Nenhum pagamento.</p>
+            <Vazio icone={HandCoins} titulo="Nenhum pagamento ainda" />
           ) : (
-            <ul className="divide-y text-sm">
+            <ul className="divide-y">
               {pagamentos.map((p) => (
-                <li key={p.id} className="flex justify-between gap-2 py-2">
-                  <span>
-                    {fmt.data(p.data)} · parcela {parcelas.find((x) => x.id === p.parcela_id)?.numero}
-                    {p.forma ? ` · ${p.forma}` : ''} <span className="text-muted-foreground">({p.origem})</span>
+                <li key={p.id} className="flex items-center justify-between gap-3 px-5 py-3 text-sm">
+                  <span className="flex items-center gap-3">
+                    <span className="bg-pago-fill/12 text-pago flex size-8 items-center justify-center rounded-full">
+                      <CheckCircle2 className="size-4" aria-hidden />
+                    </span>
+                    <span>
+                      <span className="block font-medium">{fmt.data(p.data)}</span>
+                      <span className="text-muted-foreground text-xs">
+                        parcela {parcelas.find((x) => x.id === p.parcela_id)?.numero}
+                        {p.forma ? ` · ${p.forma}` : ''} · {p.origem === 'web' ? 'painel' : 'Telegram'}
+                      </span>
+                    </span>
                   </span>
-                  <span className="text-right tabular-nums">
-                    {fmt.dinheiro(p.valor)}
+                  <span className="text-right">
+                    <Dinheiro centavos={p.valor} texto={fmt.dinheiro(p.valor)} tom="pago" sinal className="font-semibold" />
                     <span className="text-muted-foreground block text-xs">
                       P {fmt.dinheiro(p.valor_principal_alocado)} · J {fmt.dinheiro(p.valor_juros_alocado)}
                     </span>
@@ -134,16 +178,19 @@ export default async function Operacao({ params }: PageProps<'/operacoes/[id]'>)
               ))}
             </ul>
           )}
-        </CardContent>
-      </Card>
+        </Secao>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Histórico</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ol className="space-y-3 text-sm">
+        <Secao
+          titulo={
+            <span className="flex items-center gap-2">
+              <History className="text-muted-foreground size-4" aria-hidden /> Histórico
+            </span>
+          }
+        >
+          <ol className="relative space-y-5 border-l pl-6">
             {eventos.map((e) => {
+              const a = ACOES[e.acao] ?? { rotulo: e.acao, icone: Clock, cor: 'text-muted-foreground bg-muted' };
+              const Icone = a.icone;
               const pl = e.payload as {
                 antes?: { vencimento: string; valor: number };
                 depois?: { vencimento: string; valor: number };
@@ -151,29 +198,31 @@ export default async function Operacao({ params }: PageProps<'/operacoes/[id]'>)
                 nova?: { vencimento: string; valor: number };
               };
               return (
-                <li key={e.id} className="border-l-2 pl-3">
-                  <div className="font-medium">{ACOES[e.acao] ?? e.acao}</div>
-                  <div className="text-muted-foreground text-xs">{new Date(e.created_at).toLocaleString('pt-BR')}</div>
+                <li key={e.id} className="relative text-sm">
+                  <span className={cn('absolute top-0 -left-[37px] flex size-6 items-center justify-center rounded-full ring-4 ring-card', a.cor)}>
+                    <Icone className="size-3.5" aria-hidden />
+                  </span>
+                  <div className="font-medium">{a.rotulo}</div>
+                  <div className="text-muted-foreground text-xs">{new Date(e.created_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</div>
                   {pl.antes && pl.depois && (
-                    <div className="text-xs">
-                      {fmt.data(pl.antes.vencimento)} · {fmt.dinheiro(pl.antes.valor)} → {fmt.data(pl.depois.vencimento)} ·{' '}
-                      {fmt.dinheiro(pl.depois.valor)}
+                    <div className="mt-1 text-xs">
+                      {fmt.data(pl.antes.vencimento)} · {fmt.dinheiro(pl.antes.valor)} → <b>{fmt.data(pl.depois.vencimento)}</b> · <b>{fmt.dinheiro(pl.depois.valor)}</b>
                     </div>
                   )}
                   {e.acao === 'renovar' && pl.pagamento && pl.nova && (
-                    <div className="text-xs">
-                      Pagou {fmt.dinheiro(pl.pagamento.valor)} (juros {fmt.dinheiro(pl.pagamento.juros)}
-                      {pl.pagamento.principal ? `, amortizou ${fmt.dinheiro(pl.pagamento.principal)}` : ''}) → próximo vencimento{' '}
-                      {fmt.data(pl.nova.vencimento)} · {fmt.dinheiro(pl.nova.valor)}
+                    <div className="mt-1 text-xs">
+                      Pagou <span className="text-pago font-medium">{fmt.dinheiro(pl.pagamento.valor)}</span> (juros {fmt.dinheiro(pl.pagamento.juros)}
+                      {pl.pagamento.principal ? `, amortizou ${fmt.dinheiro(pl.pagamento.principal)}` : ''}) → próximo vencimento {fmt.data(pl.nova.vencimento)} ·{' '}
+                      {fmt.dinheiro(pl.nova.valor)}
                     </div>
                   )}
-                  {e.mensagem_telegram && <blockquote className="text-muted-foreground mt-1 text-xs italic">“{e.mensagem_telegram}”</blockquote>}
+                  {e.mensagem_telegram && <blockquote className="text-muted-foreground bg-muted/60 mt-1.5 rounded-md px-2 py-1 text-xs italic">“{e.mensagem_telegram}”</blockquote>}
                 </li>
               );
             })}
           </ol>
-        </CardContent>
-      </Card>
+        </Secao>
+      </div>
     </>
   );
 }

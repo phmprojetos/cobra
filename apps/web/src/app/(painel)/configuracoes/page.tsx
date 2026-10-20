@@ -9,7 +9,7 @@ export default async function Configuracoes() {
   const clientes = [...carteira.clientes.values()].filter((c) => c.ativo).map((c) => ({ id: c.id, nome: c.nome }));
   return (
     <>
-      <Cabecalho titulo="Configurações" />
+      <Cabecalho titulo="Configurações" subtitulo="Moeda, fuso, alocação de pagamentos e alertas do Telegram" />
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Geral</CardTitle>

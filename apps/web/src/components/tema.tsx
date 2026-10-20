@@ -12,12 +12,13 @@ export function ProvedorTema({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function AlternarTema() {
+export function AlternarTema({ className }: { className?: string }) {
   const { resolvedTheme, setTheme } = useTheme();
   return (
     <Button
       variant="ghost"
       size="icon"
+      className={className}
       aria-label="Alternar tema"
       onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
     >
