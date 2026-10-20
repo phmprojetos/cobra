@@ -1,14 +1,16 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, Banknote, CalendarX2, FileText, Gauge, HandCoins, Wallet } from 'lucide-react';
+import { ArrowLeft, Banknote, CalendarX2, CheckCircle2, FileText, Gauge, HandCoins, Pencil, Wallet } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { formatarDocumento, metricasCliente } from '@cobra/core';
 import { Avatar, BarraProgresso, KpiCard, Secao, tomPontualidade, Vazio } from '@/components/painel/ui';
 import { StatusBadge } from '@/components/status';
 import { carregarPainel, saldoOperacao } from '@/lib/painel';
 import { cn } from '@/lib/utils';
 
-export default async function Cliente({ params }: PageProps<'/clientes/[id]'>) {
+export default async function Cliente({ params, searchParams }: PageProps<'/clientes/[id]'>) {
   const { id } = await params;
+  const { criado, salvo } = await searchParams;
   const { repo, hoje, fmt } = await carregarPainel();
   const c = await repo.carregarCarteira({ clienteId: id });
   const cliente = c.clientes.get(id);
@@ -26,7 +28,7 @@ export default async function Cliente({ params }: PageProps<'/clientes/[id]'>) {
         </Link>
         <div className="flex flex-wrap items-center gap-4">
           <Avatar nome={cliente.nome} tom={atrasado ? 'atraso' : m.saldoAtual > 0 ? 'em-dia' : 'pago'} />
-          <div>
+          <div className="min-w-0 flex-1">
             <h1 className="flex items-center gap-3 text-2xl font-semibold tracking-tight">
               {cliente.nome}
               {atrasado && <StatusBadge status="atrasada" />}
@@ -37,7 +39,15 @@ export default async function Cliente({ params }: PageProps<'/clientes/[id]'>) {
                 .join(' · ')}
             </p>
           </div>
+          <Button nativeButton={false} variant="outline" render={<Link href={`/clientes/${id}/editar`} />}>
+            <Pencil /> Editar
+          </Button>
         </div>
+        {(criado || salvo) && (
+          <p className="border-pago-fill/30 bg-pago-fill/10 text-pago flex items-center gap-2 rounded-lg border px-3 py-2 text-sm" role="status">
+            <CheckCircle2 className="size-4" aria-hidden /> {criado ? 'Cliente cadastrado. Lance empréstimos para ele pelo Telegram.' : 'Alterações salvas.'}
+          </p>
+        )}
       </div>
 
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">

@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { Search, Users } from 'lucide-react';
+import { Search, UserPlus, Users } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { formatarDocumento, metricasCliente } from '@cobra/core';
 import { Cabecalho } from '@/components/cabecalho';
 import { Avatar, Secao, tomPontualidade, Vazio, type Tom } from '@/components/painel/ui';
@@ -40,9 +41,12 @@ export default async function Clientes({ searchParams }: PageProps<'/clientes'>)
           <Search className="text-muted-foreground size-4" aria-hidden />
           <input name="q" defaultValue={busca} placeholder="Nome ou documento…" className="h-9 w-52 bg-transparent text-sm outline-none" aria-label="Buscar cliente" />
         </form>
+        <Button nativeButton={false} render={<Link href="/clientes/novo" />} className="h-9">
+          <UserPlus /> Novo cliente
+        </Button>
       </Cabecalho>
 
-      <Secao titulo="Carteira de clientes" descricao="Novos clientes são cadastrados pelo Telegram, com nome e documento." semPadding>
+      <Secao titulo="Carteira de clientes" descricao="Cadastre aqui ou pelo Telegram: nome e documento são obrigatórios." semPadding>
         {linhas.length === 0 ? (
           <Vazio icone={Users} titulo="Nenhum cliente encontrado" />
         ) : (
