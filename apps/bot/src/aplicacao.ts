@@ -29,6 +29,7 @@ import {
   planejarRenegociacao,
   planejarRenovacao,
   executarRenovacao,
+  atualizarStatus,
   type PlanoRenovacao,
   type ClienteRow,
   type MetaLancamento,
@@ -712,7 +713,19 @@ export class Aplicacao {
     switch (p.acao) {
       case 'operacao': {
         const { entrada: e, indicadores: i, parcelas } = p.plano;
+        const vencidas = parcelas.filter((x) => x.vencimento < hoje);
+        const assumida = p.intencao.tipo === 'criar_operacao' && p.intencao.dados.data_emprestimo_assumida;
+        const alerta = vencidas.length
+          ? [
+              `⚠️ <b>Dívida já vencida</b> desde ${f.data(vencidas[0]!.vencimento, ano)} (${diferencaDias(vencidas[0]!.vencimento, hoje)} dia(s) de atraso${vencidas.length > 1 ? `, ${vencidas.length} parcelas` : ''}): entra na lista de atrasados.`,
+              ...(assumida ? [`Data do empréstimo assumida: ${f.data(e.dataEmprestimo, ano)}. Se souber a certa, toque ✏️ e diga, ex.: <i>o empréstimo foi em 01/09</i>.`] : []),
+              '',
+            ]
+          : parcelas[0]!.vencimento === hoje && assumida
+            ? [`📅 Vence hoje. Data do empréstimo assumida: ${f.data(e.dataEmprestimo, ano)} (corrija com ✏️ se souber).`, '']
+            : [];
         return [
+          ...alerta,
           '📝 <b>Novo empréstimo</b>',
           `Cliente: <b>${escapar(p.plano.clienteNome)}</b>`,
           `Emprestado: <b>${f.dinheiro(e.principal)}</b> em ${f.data(e.dataEmprestimo, ano)}`,
@@ -789,6 +802,11 @@ export class Aplicacao {
     switch (p.acao) {
       case 'operacao':
         await executarOperacao(this.repo, p.plano, meta);
+        // Dívida vencida já nasce como atrasada (sem esperar o job de 15 min).
+        {
+          const hoje = await this.repo.hoje();
+          if (p.plano.parcelas.some((x) => x.vencimento < hoje)) await atualizarStatus(this.repo);
+        }
         {
           const cli = await this.repo.cliente(p.plano.entrada.clienteId);
           await this.avisarCanal(mensagemNovoEmprestimo(p.plano, formatarDocumento(cli?.documento_tipo ?? null, cli?.documento ?? null), await this.repo.hoje(), f));

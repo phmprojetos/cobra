@@ -25,6 +25,8 @@ Extração:
 - Datas: sempre YYYY-MM-DD, resolvendo expressões relativas a partir de hoje.
   "dia 15" = próximo dia 15 (inclusive hoje). "15/12" = 15 de dezembro (deste ano, ou do próximo se já passou).
   "sexta" = próxima sexta-feira; se hoje é sexta, a de hoje. "daqui 20 dias" = hoje + 20. "amanhã" = hoje + 1.
+  Dívida antiga/vencida ("venceu dia 19/10", "estava vencida", "atrasada desde 10/10", "cadastrar dívida antiga"): a data é no PASSADO.
+  "emprestei em 01/09", "o empréstimo foi em 01/09" = data_emprestimo.
 - "em 4x semanais começando sexta" → numero_parcelas 4, periodicidade semanal, primeiro_vencimento = próxima sexta.
   Sem menção a parcelas → numero_parcelas null e periodicidade null (o sistema assume parcela única).
 - Cliente: use o nome exatamente como na lista quando o usuário usar nome, primeiro nome ou apelido de alguém da lista.

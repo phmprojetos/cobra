@@ -402,3 +402,20 @@ describe('renovação: pagou só os juros', () => {
     expect(r2.flatMap((x) => x.teclado ?? []).flat().some((b) => b.dados.endsWith(':j'))).toBe(false);
   });
 });
+
+describe('cadastro de dívida já vencida (o caso relatado)', () => {
+  it('"/novo Carlos 1000 1300 19/10/2026": avisa que está vencida, assume a data e pede confirmação', async () => {
+    const repo = new RepoMemoria();
+    await repo.criarCliente({ nome: 'Carlos', documento: { tipo: 'cpf', numero: '52998224725' } });
+    const app = new Aplicacao(repo as unknown as Repositorio, new IAFake({}), { info: () => {}, error: (e) => console.error(e) });
+    const r = await app.comando(U, 'novo', 'Carlos 1000 1300 19/10/2026');
+    const t = textos(r);
+    expect(t).toContain('⚠️ <b>Dívida já vencida</b> desde 19/10 (seg) (1 dia(s) de atraso)');
+    expect(t).toContain('entra na lista de atrasados');
+    expect(t).toContain('Data do empréstimo assumida: 19/09');
+    expect(t).toContain('Emprestado: <b>R$ 1.000,00</b> em 19/09');
+    expect(t).toContain('Vencimento: <b>19/10 (seg)</b>');
+    expect(botao(r, 'ok:')).toBeDefined();
+    expect(botao(r, 'ed:')).toBeDefined();
+  });
+});

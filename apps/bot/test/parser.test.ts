@@ -85,7 +85,7 @@ describe('atalhos sem IA', () => {
         numero_parcelas: 1,
         periodicidade: 'mensal',
         primeiro_vencimento: '2026-12-15',
-        data_emprestimo: HOJE_FIXO,
+        data_emprestimo: null,
         observacoes: null,
       },
     });

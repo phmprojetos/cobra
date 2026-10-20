@@ -87,9 +87,10 @@ export function mensagemNovoEmprestimo(plano: PlanoOperacao, doc: string, hoje: 
     parcelas.length === 1
       ? `vence ${f.data(parcelas[0]!.vencimento, ano)}`
       : `${parcelas.length} parcelas ${e.periodicidade === 'semanal' ? 'semanais' : e.periodicidade === 'quinzenal' ? 'quinzenais' : 'mensais'} de ${f.dinheiro(parcelas[0]!.valor)} a partir de ${f.data(parcelas[0]!.vencimento, ano)}`;
+  const vencida = parcelas[0]!.vencimento < hoje;
   return {
     texto: [
-      `🆕 <b>Novo empréstimo</b>`,
+      `🆕 <b>Novo empréstimo</b>${vencida ? ` · ⚠️ <b>já vencido</b> desde ${f.data(parcelas[0]!.vencimento, ano)}` : ''}`,
       `<b>${escapar(plano.clienteNome)}</b>${doc && doc !== '—' ? ` · ${doc}` : ''}`,
       `Emprestado ${f.dinheiro(e.principal)} → recebe <b>${f.dinheiro(e.totalReceber)}</b> (juros ${f.dinheiro(i.jurosTotal)})`,
       `${venc} · ${f.pct(i.taxaEfetivaMensal)} a.m.`,

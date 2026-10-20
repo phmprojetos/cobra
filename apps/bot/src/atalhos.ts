@@ -15,7 +15,7 @@ function separarNome(tokens: string[]): { nome: string; resto: string[] } {
 }
 
 /** `/novo Carlos 2000 2400 15/12 [4x] [semanal]` */
-export function parseNovo(args: string, hoje: DataISO): Intencao | { erro: string } {
+export function parseNovo(args: string, hoje: DataISO): IntencaoParcial | { erro: string } {
   const { nome, resto } = separarNome(args.trim().split(/\s+/).filter(Boolean));
   const [vEmp, vTot, venc, ...extras] = resto;
   const emprestado = vEmp ? parseValor(vEmp) : null;
@@ -43,7 +43,8 @@ export function parseNovo(args: string, hoje: DataISO): Intencao | { erro: strin
       numero_parcelas: numero,
       periodicidade,
       primeiro_vencimento: vencimento,
-      data_emprestimo: hoje,
+      // null: hoje, ou estimada se o vencimento já passou (dívida vencida)
+      data_emprestimo: null,
       observacoes: null,
     },
   };

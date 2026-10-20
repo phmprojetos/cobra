@@ -1,4 +1,4 @@
-import { parseDataCurta, parseDocumento, parseValor, type DataISO } from '@cobra/core';
+import { parseDataCurta, parseDocumento, parseValor, somarDias, somarMeses, type DataISO, type Periodicidade } from '@cobra/core';
 import { escapar } from './formatacao';
 import type { Intencao, IntencaoParcial } from './ia/ferramentas';
 
@@ -63,11 +63,23 @@ export function problema(r: Rascunho, hoje: DataISO, recente: Campo | null = nul
       mensagem: 'O total a receber não pode ser menor que o valor emprestado.',
     };
   }
-  const base = d.data_emprestimo ?? hoje;
-  if (d.primeiro_vencimento && d.primeiro_vencimento <= base) {
+  // Sem data do empréstimo, vencimento passado = dívida vencida (a data é assumida em `completar`).
+  // Com data informada, o vencimento precisa ser depois dela.
+  if (d.data_emprestimo && d.primeiro_vencimento && d.primeiro_vencimento <= d.data_emprestimo) {
     return { campo: 'primeiro_vencimento', mensagem: 'O vencimento precisa ser depois da data do empréstimo.' };
   }
   return null;
+}
+
+/**
+ * Data do empréstimo quando não foi dita: hoje; ou, se o vencimento já chegou (dívida vencida
+ * trazida de outro controle), um período antes do primeiro vencimento.
+ */
+export function dataEmprestimoPadrao(primeiroVencimento: DataISO, periodicidade: Periodicidade | null, hoje: DataISO): { data: DataISO; assumida: boolean } {
+  if (primeiroVencimento > hoje) return { data: hoje, assumida: false };
+  const data =
+    periodicidade === 'semanal' ? somarDias(primeiroVencimento, -7) : periodicidade === 'quinzenal' ? somarDias(primeiroVencimento, -15) : somarMeses(primeiroVencimento, -1);
+  return { data, assumida: true };
 }
 
 export function pergunta(campo: Campo, r: Rascunho): string {
@@ -137,17 +149,19 @@ export function completar(r: Rascunho, hoje: DataISO): Intencao | null {
   switch (r.tipo) {
     case 'criar_operacao': {
       const d = r.dados;
+      const padrao = d.data_emprestimo ? null : dataEmprestimoPadrao(d.primeiro_vencimento!, d.periodicidade, hoje);
       return {
         tipo: 'criar_operacao',
         dados: {
           ...d,
+          data_emprestimo_assumida: padrao?.assumida ?? false,
           cliente: d.cliente!,
           valor_emprestado: d.valor_emprestado!,
           valor_total_receber: d.valor_total_receber!,
           primeiro_vencimento: d.primeiro_vencimento!,
           numero_parcelas: d.numero_parcelas ?? 1,
           periodicidade: d.periodicidade ?? 'mensal',
-          data_emprestimo: d.data_emprestimo ?? hoje,
+          data_emprestimo: d.data_emprestimo ?? padrao!.data,
         },
       };
     }

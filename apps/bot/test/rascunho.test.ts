@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { campoFaltante, completar, ehRascunho, mesclar, pergunta, preencherDireto, problema, resumoParcial, type Rascunho } from '../src/rascunho';
+import { campoFaltante, completar, dataEmprestimoPadrao, ehRascunho, mesclar, pergunta, preencherDireto, problema, resumoParcial, type Rascunho } from '../src/rascunho';
 import { HOJE_FIXO, MENSAGENS, PARCIAIS } from './fixtures';
 
 const op = (dados: Partial<Extract<Rascunho, { tipo: 'criar_operacao' }>['dados']>): Rascunho => ({
@@ -97,8 +97,10 @@ describe('mesclar e problema', () => {
     const outro: Rascunho = { tipo: 'registrar_pagamento', dados: { cliente: 'X', valor: 1, data: null, forma: null } };
     expect(mesclar(base, outro)).toBe(outro);
   });
-  it('vencimento antes do empréstimo', () => {
-    expect(problema(op({ primeiro_vencimento: HOJE_FIXO }), HOJE_FIXO)?.campo).toBe('primeiro_vencimento');
+  it('vencimento antes do empréstimo só é erro se a data do empréstimo foi informada', () => {
+    expect(problema(op({ primeiro_vencimento: '2026-10-19', data_emprestimo: '2026-10-20' }), HOJE_FIXO)?.campo).toBe('primeiro_vencimento');
+    // Sem data do empréstimo: dívida vencida, não é erro
+    expect(problema(op({ primeiro_vencimento: '2026-10-19' }), HOJE_FIXO)).toBeNull();
     expect(problema({ tipo: 'criar_cliente', dados: { nome: null, apelidos: [], telefone: null, documento: null } }, HOJE_FIXO)).toBeNull();
   });
 });
@@ -131,5 +133,21 @@ describe('textos', () => {
     expect(completar({ tipo: 'registrar_pagamento', dados: { cliente: 'A', valor: 5, data: null, forma: null } }, HOJE_FIXO)?.dados).toMatchObject({ data: HOJE_FIXO });
     expect(completar({ tipo: 'prorrogar', dados: { cliente: 'A', novo_vencimento: '2026-12-01', acrescimo: null } }, HOJE_FIXO)?.tipo).toBe('prorrogar');
     expect(completar({ tipo: 'criar_cliente', dados: { nome: 'A', apelidos: [], telefone: null, documento: null } }, HOJE_FIXO)?.tipo).toBe('criar_cliente');
+  });
+});
+
+describe('dívida já vencida (importada de outro controle)', () => {
+  it('data do empréstimo assumida um período antes do vencimento', () => {
+    expect(dataEmprestimoPadrao('2026-11-20', null, HOJE_FIXO)).toEqual({ data: HOJE_FIXO, assumida: false });
+    expect(dataEmprestimoPadrao('2026-10-19', null, HOJE_FIXO)).toEqual({ data: '2026-09-19', assumida: true });
+    expect(dataEmprestimoPadrao('2026-10-20', 'mensal', HOJE_FIXO)).toEqual({ data: '2026-09-20', assumida: true });
+    expect(dataEmprestimoPadrao('2026-10-19', 'semanal', HOJE_FIXO)).toEqual({ data: '2026-10-12', assumida: true });
+    expect(dataEmprestimoPadrao('2026-10-19', 'quinzenal', HOJE_FIXO)).toEqual({ data: '2026-10-04', assumida: true });
+  });
+  it('completar marca a data como assumida; com data informada, não', () => {
+    const vencida = completar(op({ cliente: 'Carlos', valor_emprestado: 1000, valor_total_receber: 1300, primeiro_vencimento: '2026-10-19' }), HOJE_FIXO);
+    expect(vencida?.dados).toMatchObject({ data_emprestimo: '2026-09-19', data_emprestimo_assumida: true });
+    const informada = completar(op({ cliente: 'Carlos', valor_emprestado: 1000, valor_total_receber: 1300, primeiro_vencimento: '2026-10-19', data_emprestimo: '2026-09-01' }), HOJE_FIXO);
+    expect(informada?.dados).toMatchObject({ data_emprestimo: '2026-09-01', data_emprestimo_assumida: false });
   });
 });

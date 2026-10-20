@@ -56,6 +56,17 @@ describe.skipIf(!process.env.ANTHROPIC_API_KEY)(`parser com ${modelo}`, () => {
     expect(await ia.interpretar(texto, ctx)).toMatchObject(esperado);
   });
 
+  it('dívida antiga: vencimento no passado', async () => {
+    const r = await ia.interpretar('cadastrar dívida do Carlos: emprestei 1000, volta 1300, venceu dia 19/10', ctx);
+    expect(r).toMatchObject({ tipo: 'criar_operacao', dados: { cliente: 'Carlos Souza', valor_emprestado: 1000, valor_total_receber: 1300, primeiro_vencimento: '2026-10-19' } });
+  });
+
+  it('correção da data do empréstimo sobre o rascunho', async () => {
+    const rascunho = { tipo: 'criar_operacao' as const, dados: { cliente: 'Carlos Souza', documento: null, valor_emprestado: 1000, valor_total_receber: 1300, numero_parcelas: null, periodicidade: null, primeiro_vencimento: '2026-10-19', data_emprestimo: null, observacoes: null } };
+    const r = await ia.interpretar('o empréstimo foi em 01/09', { ...ctx, rascunho });
+    expect(r).toMatchObject({ tipo: 'criar_operacao', dados: { data_emprestimo: '2026-09-01' } });
+  });
+
   it('falta valor: abre rascunho sem inventar números', async () => {
     const r = await ia.interpretar('emprestei pro Carlos', ctx);
     expect(r).toMatchObject({ tipo: 'criar_operacao', dados: { cliente: 'Carlos Souza', valor_emprestado: null, valor_total_receber: null } });

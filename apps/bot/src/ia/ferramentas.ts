@@ -229,6 +229,8 @@ export type Intencao =
         periodicidade: z.infer<typeof periodicidade>;
         primeiro_vencimento: string;
         data_emprestimo: string;
+        /** Dívida vencida sem data informada: a data do empréstimo foi estimada (mostrar no resumo). */
+        data_emprestimo_assumida?: boolean;
       };
     }
   | { tipo: 'registrar_pagamento'; dados: Omit<Dados<'registrar_pagamento'>, 'cliente' | 'valor' | 'data'> & { cliente: string; valor: number; data: string } }
