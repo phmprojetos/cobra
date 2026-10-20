@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { metricasCliente } from '@cobra/core';
+import { formatarDocumento, metricasCliente } from '@cobra/core';
 import { StatusBadge } from '@/components/status';
 import { carregarPainel, saldoOperacao } from '@/lib/painel';
 
@@ -28,7 +28,12 @@ export default async function Cliente({ params }: PageProps<'/clientes/[id]'>) {
         </Link>
         <h1 className="text-xl font-semibold tracking-tight">{cliente.nome}</h1>
         <p className="text-muted-foreground text-sm">
-          {[cliente.apelidos.length ? `apelidos: ${cliente.apelidos.join(', ')}` : null, cliente.telefone, cliente.observacoes]
+          {[
+            formatarDocumento(cliente.documento_tipo, cliente.documento),
+            cliente.apelidos.length ? `apelidos: ${cliente.apelidos.join(', ')}` : null,
+            cliente.telefone,
+            cliente.observacoes,
+          ]
             .filter(Boolean)
             .join(' · ') || 'Sem observações'}
         </p>

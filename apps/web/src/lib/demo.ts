@@ -1,6 +1,7 @@
 import 'server-only';
 import {
   alocarPagamento,
+  completarCpf,
   calcularIndicadores,
   calcularPerda,
   calcularStatusOperacao,
@@ -154,10 +155,12 @@ function gerar(): Estado {
   const h = hoje(config);
   const aleatorio = rng(42);
   const criado = agoraIso();
-  const clientes: ClienteRow[] = CLIENTES.map(([nome, apelidos, , extra]) => ({
+  const clientes: ClienteRow[] = CLIENTES.map(([nome, apelidos, , extra], i) => ({
     id: novoId('cli'),
     nome,
     apelidos,
+    documento_tipo: 'cpf',
+    documento: completarCpf(String(123450000 + i * 7919)),
     telefone: extra?.startsWith('+') ? extra : null,
     observacoes: extra && !extra.startsWith('+') ? extra : null,
     ativo: true,

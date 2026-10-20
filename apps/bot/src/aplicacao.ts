@@ -1,5 +1,9 @@
 import {
+  AJUDA_DOCUMENTO,
   ErroRegra,
+  formatarDocumento,
+  parseDocumento,
+  type Documento,
   inicioSemana,
   metricasCliente,
   parseDataCurta,
@@ -46,7 +50,7 @@ type Pendente =
   | { acao: 'renegociacao'; plano: PlanoRenegociacao; intencao: Intencao | null; texto: string }
   | {
       acao: 'cliente';
-      dados: { nome: string; apelidos: string[]; telefone: string | null };
+      dados: { nome: string; apelidos: string[]; telefone: string | null; documento: Documento };
       intencao: Intencao;
       texto: string;
     };
@@ -58,6 +62,15 @@ interface EscolhaCliente {
   opcoes: { id: string; nome: string }[];
 }
 
+/** Aguardando o documento para cadastrar um cliente novo (e então seguir a intenção). */
+interface CadastroPendente {
+  intencao: Intencao;
+  texto: string;
+  nome: string;
+  /** Cliente que já tem o documento informado (confirmação "é a mesma pessoa?"). */
+  existenteId?: string;
+}
+
 interface EscolhaParcela {
   intencao: Extract<Intencao, { tipo: 'prorrogar' }>;
   texto: string;
@@ -65,9 +78,21 @@ interface EscolhaParcela {
 }
 
 /** Estados em que a próxima mensagem de texto é a resposta a uma pergunta do bot. */
-const ESTADOS_TEXTO = ['aguardando_edicao', 'aguardando_valor_parcial', 'aguardando_data_adiar', 'aguardando_novo', 'aguardando_pagar'];
+const ESTADOS_TEXTO = [
+  'aguardando_edicao',
+  'aguardando_valor_parcial',
+  'aguardando_data_adiar',
+  'aguardando_novo',
+  'aguardando_pagar',
+  'aguardando_documento',
+];
 
 const centavos = (reais: number): Centavos => Math.round(reais * 100);
+
+/** "Ana Paula · CPF …4725": distingue homônimos sem expor o documento inteiro. */
+function rotuloCliente(c: { nome: string; documento_tipo?: string | null; documento?: string | null }): string {
+  return c.documento ? `${c.nome} · ${(c.documento_tipo ?? '').toUpperCase()} …${c.documento.slice(-4)}` : c.nome;
+}
 
 export interface Log {
   info(obj: unknown, msg?: string): void;
@@ -170,6 +195,8 @@ export class Aplicacao {
           return this.editar(id);
         case 'cl':
           return this.escolherCliente(userId, id, extra ?? '');
+        case 'cd':
+          return this.confirmarMesmoCliente(userId, id);
         case 'pa':
           return this.escolherParcela(userId, id, Number(extra));
         // Botões dos alertas de parcela
@@ -200,13 +227,11 @@ export class Aplicacao {
         return [{ texto: escapar(r.dados.pergunta) }];
       case 'consultar':
         return this.consultar(r);
-      case 'criar_cliente':
-        return this.pedirConfirmacao(userId, {
-          acao: 'cliente',
-          dados: { nome: r.dados.nome.trim(), apelidos: r.dados.apelidos, telefone: r.dados.telefone },
-          intencao: r,
-          texto,
-        });
+      case 'criar_cliente': {
+        const doc = r.dados.documento ? parseDocumento(r.dados.documento) : null;
+        if (!doc || 'erro' in doc) return this.pedirDocumento(userId, r, texto, r.dados.nome.trim(), doc && 'erro' in doc ? doc.erro : null);
+        return this.cadastrarComDocumento(userId, { intencao: r, texto, nome: r.dados.nome.trim() }, doc);
+      }
       case 'criar_operacao':
         return this.comCliente(userId, r, texto, r.dados.cliente, true);
       case 'registrar_pagamento':
@@ -225,14 +250,15 @@ export class Aplicacao {
     if (opcoes.length === 0) {
       opcoes = (await this.repo.buscarClientes(nome, 4)).filter((c) => c.similaridade >= 0.25);
     }
-    opcoes = opcoes.slice(0, 5).map((c) => ({ id: c.id, nome: c.nome }));
+    opcoes = opcoes.slice(0, 5).map((c) => ({ id: c.id, nome: rotuloCliente(c) }));
     if (opcoes.length === 0 && !permitirNovo) {
       return [{ texto: `Não encontrei nenhum cliente parecido com <b>${escapar(nome)}</b>.` }];
     }
+    if (opcoes.length === 0) return this.pedirDocumento(userId, intencao, texto, nome, null);
     const payload: EscolhaCliente = { intencao, texto, nomeDigitado: nome, opcoes };
     const sid = await this.repo.criarSessao(userId, 'escolher_cliente', payload);
     const teclado: Botao[][] = opcoes.map((o, i) => [{ texto: o.nome, dados: `cl:${sid}:${i}` }]);
-    if (permitirNovo) teclado.push([{ texto: `➕ Cadastrar "${nome}"`, dados: `cl:${sid}:n` }]);
+    if (permitirNovo) teclado.push([{ texto: `➕ É outra pessoa: cadastrar "${nome}"`, dados: `cl:${sid}:n` }]);
     teclado.push([{ texto: '❌ Cancelar', dados: `x:${sid}` }]);
     const pergunta =
       r.tipo === 'ambiguo'
@@ -241,6 +267,73 @@ export class Aplicacao {
           ? `Não achei <b>${escapar(nome)}</b>. Era um destes?`
           : `<b>${escapar(nome)}</b> não está cadastrado.`;
     return [{ texto: pergunta, teclado }];
+  }
+
+  // ─────────────────────────── cadastro com documento ───────────────────────────
+
+  /** Pergunta o documento: nome + documento são obrigatórios e o documento evita duplicidade. */
+  private async pedirDocumento(userId: number, intencao: Intencao, texto: string, nome: string, erro: string | null): Promise<Resposta[]> {
+    const payload: CadastroPendente = { intencao, texto, nome };
+    const sid = await this.repo.criarSessao(userId, 'aguardando_documento', payload);
+    return [
+      {
+        texto: [
+          ...(erro ? [`⚠️ ${erro}`] : []),
+          `👤 Para cadastrar <b>${escapar(nome)}</b>, qual o documento?`,
+          AJUDA_DOCUMENTO,
+        ].join('\n'),
+        teclado: [[{ texto: '❌ Cancelar', dados: `x:${sid}` }]],
+      },
+    ];
+  }
+
+  /**
+   * Com o documento em mãos: se já existe cliente com ele, pergunta se é a mesma pessoa
+   * (evita duplicar quando o nome veio diferente); senão cadastra e segue o lançamento.
+   */
+  private async cadastrarComDocumento(userId: number, c: CadastroPendente, doc: Documento): Promise<Resposta[]> {
+    const existente = await this.repo.clientePorDocumento(doc);
+    if (existente) {
+      const sid = await this.repo.criarSessao(userId, 'confirmar_documento', { ...c, existenteId: existente.id } satisfies CadastroPendente);
+      return [
+        {
+          texto: `🔎 ${formatarDocumento(doc.tipo, doc.numero)} já é de <b>${escapar(existente.nome)}</b>. É a mesma pessoa?`,
+          teclado: [
+            [{ texto: `✅ Sim, usar ${existente.nome}`, dados: `cd:${sid}` }],
+            [{ texto: '❌ Cancelar', dados: `x:${sid}` }],
+          ],
+        },
+      ];
+    }
+    if (c.intencao.tipo === 'criar_cliente') {
+      const d = c.intencao.dados;
+      return this.pedirConfirmacao(userId, {
+        acao: 'cliente',
+        dados: { nome: c.nome, apelidos: d.apelidos, telefone: d.telefone, documento: doc },
+        intencao: c.intencao,
+        texto: c.texto,
+      });
+    }
+    const novo = await this.repo.criarCliente({ nome: c.nome, documento: doc });
+    const r = await this.continuarComCliente(userId, c.intencao, c.texto, novo);
+    return [{ texto: `👤 <b>${escapar(novo.nome)}</b> cadastrado · ${formatarDocumento(doc.tipo, doc.numero)}` }, ...r];
+  }
+
+  private async confirmarMesmoCliente(userId: number, sessaoId: string): Promise<Resposta[]> {
+    const sessao = await this.repo.obterSessao(sessaoId);
+    if (!sessao || sessao.estado !== 'confirmar_documento' || !(await this.repo.consumirSessao(sessaoId))) {
+      return [{ texto: '⌛ Esta pergunta expirou. Envie a mensagem de novo.', editarOriginal: true }];
+    }
+    const p = sessao.payload as CadastroPendente;
+    const cliente = p.existenteId ? await this.repo.cliente(p.existenteId) : null;
+    if (!cliente) return [];
+    // O nome usado no lançamento vira apelido: da próxima vez o bot reconhece direto.
+    await this.repo.adicionarApelido(cliente.id, p.nome);
+    if (p.intencao.tipo === 'criar_cliente') {
+      return [{ texto: `👤 <b>${escapar(cliente.nome)}</b> já está cadastrado. Guardei "${escapar(p.nome)}" como apelido.`, editarOriginal: true }];
+    }
+    const r = await this.continuarComCliente(userId, p.intencao, p.texto, cliente);
+    return [{ texto: `👤 ${escapar(cliente.nome)} (apelido "${escapar(p.nome)}" guardado)`, editarOriginal: true }, ...r];
   }
 
   private async continuarComCliente(userId: number, intencao: Intencao, texto: string, cliente: ClienteRow | { id: string; nome: string }): Promise<Resposta[]> {
@@ -371,6 +464,7 @@ export class Aplicacao {
         return [
           '👤 <b>Novo cliente</b>',
           `Nome: <b>${escapar(p.dados.nome)}</b>`,
+          `Documento: ${formatarDocumento(p.dados.documento.tipo, p.dados.documento.numero)}`,
           ...(p.dados.apelidos.length ? [`Apelidos: ${escapar(p.dados.apelidos.join(', '))}`] : []),
           ...(p.dados.telefone ? [`Telefone: ${escapar(p.dados.telefone)}`] : []),
         ].join('\n');
@@ -452,6 +546,12 @@ export class Aplicacao {
         const { parcelaId } = payload as { parcelaId: string };
         return this.planejarAdiamento(userId, parcelaId, data, `Adiar para ${texto}`);
       }
+      case 'aguardando_documento': {
+        const c = payload as CadastroPendente;
+        const doc = parseDocumento(texto);
+        if ('erro' in doc) return this.pedirDocumento(userId, c.intencao, c.texto, c.nome, doc.erro);
+        return this.cadastrarComDocumento(userId, c, doc);
+      }
       case 'aguardando_novo':
       case 'aguardando_pagar': {
         const r = estado === 'aguardando_novo' ? parseNovo(texto, hoje) : parsePagar(texto, hoje);
@@ -468,15 +568,17 @@ export class Aplicacao {
       return [{ texto: '⌛ Esta pergunta expirou. Envie a mensagem de novo.', editarOriginal: true }];
     }
     const p = sessao.payload as EscolhaCliente;
-    let cliente: { id: string; nome: string } | undefined;
     if (escolha === 'n') {
-      cliente = await this.repo.criarCliente({ nome: p.nomeDigitado });
-    } else {
-      cliente = p.opcoes[Number(escolha)];
+      const r = await this.pedirDocumento(userId, p.intencao, p.texto, p.nomeDigitado, null);
+      return [{ texto: `➕ Novo cliente: <b>${escapar(p.nomeDigitado)}</b>`, editarOriginal: true }, ...r];
     }
+    const escolhido = p.opcoes[Number(escolha)];
+    const cliente = escolhido && (await this.repo.cliente(escolhido.id));
     if (!cliente) return [];
+    // Aprende: o nome digitado vira apelido do cliente escolhido.
+    await this.repo.adicionarApelido(cliente.id, p.nomeDigitado);
     const r = await this.continuarComCliente(userId, p.intencao, p.texto, cliente);
-    return [{ texto: escolha === 'n' ? `👤 Cliente <b>${escapar(cliente.nome)}</b> cadastrado.` : `👤 ${escapar(cliente.nome)}`, editarOriginal: true }, ...r];
+    return [{ texto: `👤 ${escapar(cliente.nome)}`, editarOriginal: true }, ...r];
   }
 
   private async escolherParcela(userId: number, sessaoId: string, indice: number): Promise<Resposta[]> {

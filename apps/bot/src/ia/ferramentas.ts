@@ -107,8 +107,9 @@ export const FERRAMENTAS = [
         nome: { type: 'string' },
         apelidos: { type: 'array', items: { type: 'string' } },
         telefone: { type: ['string', 'null'] },
+        documento: { type: ['string', 'null'], description: 'CPF, CNPJ ou outro documento como digitado, ou null se não informado' },
       },
-      required: ['nome', 'apelidos', 'telefone'],
+      required: ['nome', 'apelidos', 'telefone', 'documento'],
       additionalProperties: false,
     },
   },
@@ -161,6 +162,7 @@ export const SCHEMAS = {
     nome: z.string().min(1),
     apelidos: z.array(z.string()),
     telefone: z.string().nullable(),
+    documento: z.string().nullable(),
   }),
   pedir_esclarecimento: z.object({ pergunta: z.string().min(1) }),
 } as const;

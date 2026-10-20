@@ -1,4 +1,4 @@
-import { instanteLocal, somarDias } from '@cobra/core';
+import { completarCpf, formatarDocumento, instanteLocal, somarDias } from '@cobra/core';
 import { criarClienteServico, Repositorio } from '@cobra/db';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Bot } from 'grammy';
@@ -9,14 +9,15 @@ import type { Intencao } from '../src/ia/ferramentas';
 import type { ContextoInterpretacao, Interpretador, ResultadoInterpretacao } from '../src/ia/interpretador';
 import { executarJobNotificacoes } from '../src/notificacoes';
 
-const URL = process.env.SUPABASE_URL ?? '';
-const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
+const URL = process.env.SUPABASE_TEST_URL ?? '';
+const SERVICE = process.env.SUPABASE_TEST_SERVICE_ROLE_KEY ?? '';
 /**
- * Integração contra o projeto Supabase do .env. Grava dados de teste (clientes inativados ao final,
- * operações e um usuário de Auth "@teste.local"), por isso só roda com RUN_DB_TESTS=1 —
- * use um projeto de desenvolvimento, nunca o de produção.
+ * Integração contra um projeto Supabase DE TESTE (SUPABASE_TEST_*), nunca o de produção:
+ * grava clientes, operações e um usuário de Auth "@teste.local". Só roda com RUN_DB_TESTS=1.
+ * Limpeza: psql "$SUPABASE_TEST_DB_URL" -f scripts/limpar-dados-teste.sql
  */
-const disponivel = !!process.env.RUN_DB_TESTS && !!URL && !!SERVICE;
+const disponivel =
+  !!process.env.RUN_DB_TESTS && !!URL && !!SERVICE && URL !== process.env.SUPABASE_URL; // trava: nunca a URL de produção
 
 /** Interpretador simulado: devolve a intenção registrada para cada texto. */
 class InterpretadorFake implements Interpretador {
@@ -37,7 +38,7 @@ function botao(r: Resposta[], prefixo: string): string {
   return b.dados;
 }
 
-describe.skipIf(!disponivel)('fluxos do bot (Supabase local)', () => {
+describe.skipIf(!disponivel)('fluxos do bot (Supabase)', () => {
   const db = disponivel ? criarClienteServico(URL, SERVICE) : (null as never);
   const repo = new Repositorio(db);
   const ia = new InterpretadorFake();
@@ -47,10 +48,15 @@ describe.skipIf(!disponivel)('fluxos do bot (Supabase local)', () => {
   const clientes: string[] = [];
   let hoje: string;
 
+  // CPFs válidos e únicos por execução.
+  const base = Number(String(Date.now()).slice(-8));
+  const cpf = (i: number) => completarCpf(String(base * 10 + i));
+
   beforeAll(async () => {
     hoje = await repo.hoje();
-    for (const nome of [nomeCarlos, `Ana Xavier Q${suf}`, `Ana Yara Q${suf}`]) {
-      clientes.push((await repo.criarCliente({ nome })).id);
+    const nomes = [nomeCarlos, `Ana Xavier Q${suf}`, `Ana Yara Q${suf}`];
+    for (const [i, nome] of nomes.entries()) {
+      clientes.push((await repo.criarCliente({ nome, documento: { tipo: 'cpf', numero: cpf(i) } })).id);
     }
   });
   afterAll(async () => {
@@ -111,26 +117,59 @@ describe.skipIf(!disponivel)('fluxos do bot (Supabase local)', () => {
     expect(op.status).toBe('quitada');
   });
 
-  it('cliente ambíguo pergunta com botões; inexistente oferece cadastro', async () => {
+  it('cliente ambíguo pergunta com botões e aprende o apelido', async () => {
     ia.respostas.set('ana pagou', () => ({ tipo: 'registrar_pagamento', dados: { cliente: `Q${suf}`, valor: 10, data: hoje, forma: null } }));
     const r = await app.mensagem(USER, 'ana pagou');
     expect(r[0]!.texto).toContain('Qual');
-    expect(r[0]!.teclado!.flat().map((b) => b.texto)).toEqual(expect.arrayContaining([`Ana Xavier Q${suf}`, `Ana Yara Q${suf}`, '❌ Cancelar']));
-    expect(r[0]!.teclado!.flat().some((b) => b.texto.startsWith('➕'))).toBe(false);
-    // Escolhe a primeira: sem empréstimo em aberto
+    const rotulos = r[0]!.teclado!.flat().map((b) => b.texto);
+    // Homônimos são distinguidos pelo final do documento
+    expect(rotulos).toEqual(expect.arrayContaining([`Ana Xavier Q${suf} · CPF …${cpf(1).slice(-4)}`, '❌ Cancelar']));
+    expect(rotulos.some((t) => t.startsWith('➕'))).toBe(false);
     const r2 = await app.callback(USER, botao(r, 'cl:'));
     expect(r2.map((x) => x.texto).join()).toContain('Não há parcelas em aberto');
+    // O termo digitado virou apelido do escolhido
+    expect((await repo.cliente(clientes[1]!))?.apelidos).toContain(`Q${suf}`);
+  });
 
-    ia.respostas.set('novo fulano', () => ({ ...criar(somarDias(hoje, 10)), dados: { ...(criar(hoje).dados as object), cliente: `Zé Ninguém ${suf}`, primeiro_vencimento: somarDias(hoje, 10) } } as Intencao));
-    const r3 = await app.mensagem(USER, 'novo fulano');
-    const novo = r3[0]!.teclado!.flat().find((b) => b.dados.endsWith(':n'))!;
-    expect(novo.texto).toContain('Cadastrar');
-    const r4 = await app.callback(USER, novo.dados);
-    expect(r4[0]!.texto).toContain('cadastrado');
-    expect(r4[1]!.texto).toContain('Novo empréstimo');
-    await app.callback(USER, botao(r4, 'x:'));
-    const z = (await db.from('clientes').select('id').eq('nome', `Zé Ninguém ${suf}`).single()).data!;
-    clientes.push(z.id);
+  it('cliente novo exige documento; documento repetido não duplica', async () => {
+    const nomeNovo = `Zé Ninguém ${suf}`;
+    ia.respostas.set('novo fulano', () => ({ ...criar(somarDias(hoje, 10)), dados: { ...(criar(hoje).dados as object), cliente: nomeNovo, primeiro_vencimento: somarDias(hoje, 10) } } as Intencao));
+    let r1 = await app.mensagem(USER, 'novo fulano');
+    // Se houver nome parecido, o bot lista antes; seguimos por "É outra pessoa".
+    if (!r1[0]!.texto.includes('qual o documento')) {
+      const outra = r1[0]!.teclado!.flat().find((b) => b.dados.endsWith(':n'))!;
+      expect(outra.texto).toContain('É outra pessoa');
+      r1 = (await app.callback(USER, outra.dados)).slice(1);
+    }
+    expect(r1[0]!.texto).toContain('qual o documento');
+
+    // Documento inválido: avisa e pergunta de novo
+    const r2 = await app.mensagem(USER, '123.456.789-00');
+    expect(r2[0]!.texto).toContain('CPF inválido');
+
+    // Válido: cadastra e segue para o resumo do empréstimo
+    const r3 = await app.mensagem(USER, formatarDocumento('cpf', cpf(5)));
+    expect(r3[0]!.texto).toContain('cadastrado');
+    expect(r3[1]!.texto).toContain('Novo empréstimo');
+    await app.callback(USER, botao(r3, 'x:'));
+    const novo = (await db.from('clientes').select('id, documento').eq('nome', nomeNovo).single()).data!;
+    expect(novo.documento).toBe(cpf(5));
+    clientes.push(novo.id);
+
+    // Mesmo CPF com outro nome ("Zezinho"): pergunta se é a mesma pessoa, não cria outro
+    ia.respostas.set('zezinho', () => ({ ...criar(somarDias(hoje, 12)), dados: { ...(criar(hoje).dados as object), cliente: `Zezinho ${suf}`, primeiro_vencimento: somarDias(hoje, 12) } } as Intencao));
+    let r4 = await app.mensagem(USER, 'zezinho');
+    if (!r4[0]!.texto.includes('qual o documento')) {
+      r4 = (await app.callback(USER, r4[0]!.teclado!.flat().find((b) => b.dados.endsWith(':n'))!.dados)).slice(1);
+    }
+    const r5 = await app.mensagem(USER, cpf(5));
+    expect(r5[0]!.texto).toContain(`já é de <b>${nomeNovo}</b>`);
+    const r6 = await app.callback(USER, botao(r5, 'cd:'));
+    expect(r6[1]!.texto).toContain('Novo empréstimo');
+    await app.callback(USER, botao(r6, 'x:'));
+    const docs = (await db.from('clientes').select('id').eq('documento', cpf(5))).data!;
+    expect(docs).toHaveLength(1);
+    expect((await repo.cliente(novo.id))?.apelidos).toContain(`Zezinho ${suf}`);
   });
 
   it('editar: correção vai ao interpretador com o rascunho', async () => {

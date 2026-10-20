@@ -1,4 +1,13 @@
-import { chaveAlerta, dataLocal, somarDias, type Carteira, type DataISO } from '@cobra/core';
+import {
+  chaveAlerta,
+  dataLocal,
+  ErroRegra,
+  normalizarNome,
+  somarDias,
+  type Carteira,
+  type DataISO,
+  type Documento,
+} from '@cobra/core';
 import type { Db } from './cliente';
 import type { Json } from './database.types';
 import {
@@ -107,24 +116,46 @@ export class Repositorio {
     return ok(await this.db.rpc('buscar_clientes', { p_termo: termo, p_limite: limite }));
   }
 
+  /** Cadastro exige nome + documento; o documento é único (chave contra duplicidade). */
   async criarCliente(c: {
     nome: string;
+    documento: Documento;
     apelidos?: string[];
     telefone?: string | null;
     observacoes?: string | null;
   }): Promise<ClienteRow> {
-    return ok(
-      await this.db
-        .from('clientes')
-        .insert({
-          nome: c.nome.trim(),
-          apelidos: c.apelidos ?? [],
-          telefone: c.telefone ?? null,
-          observacoes: c.observacoes ?? null,
-        })
-        .select('*')
-        .single(),
+    const res = await this.db
+      .from('clientes')
+      .insert({
+        nome: c.nome.trim(),
+        documento_tipo: c.documento.tipo,
+        documento: c.documento.numero,
+        apelidos: c.apelidos ?? [],
+        telefone: c.telefone ?? null,
+        observacoes: c.observacoes ?? null,
+      })
+      .select('*')
+      .single();
+    if (res.error?.code === '23505') {
+      throw new ErroRegra('documento_duplicado', 'Já existe um cliente com este documento.');
+    }
+    return ok(res);
+  }
+
+  async clientePorDocumento(d: Documento): Promise<ClienteRow | null> {
+    return okTalvez(
+      await this.db.from('clientes').select('*').eq('documento_tipo', d.tipo).eq('documento', d.numero).maybeSingle(),
     );
+  }
+
+  /** Guarda um nome alternativo (ex.: como o cliente foi chamado num lançamento). Ignora repetidos. */
+  async adicionarApelido(clienteId: string, apelido: string): Promise<void> {
+    const c = await this.cliente(clienteId);
+    const novo = apelido.trim();
+    if (!c || !novo) return;
+    const ja = [c.nome, ...c.apelidos].some((n) => normalizarNome(n) === normalizarNome(novo));
+    if (ja) return;
+    semErro(await this.db.from('clientes').update({ apelidos: [...c.apelidos, novo] }).eq('id', clienteId));
   }
 
   // ───────────── carteira ─────────────

@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { somarDias } from '@cobra/core';
+import { completarCpf, somarDias } from '@cobra/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   atualizarStatus,
@@ -16,16 +16,17 @@ import {
   type Database,
 } from '../src';
 
-const URL = process.env.SUPABASE_URL ?? '';
-const ANON = process.env.SUPABASE_ANON_KEY ?? '';
-const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
+const URL = process.env.SUPABASE_TEST_URL ?? '';
+const ANON = process.env.SUPABASE_TEST_ANON_KEY ?? '';
+const SERVICE = process.env.SUPABASE_TEST_SERVICE_ROLE_KEY ?? '';
 
 /**
- * Integração contra o projeto Supabase do .env. Grava dados de teste (clientes inativados ao final,
- * operações e um usuário de Auth "@teste.local"), por isso só roda com RUN_DB_TESTS=1 —
- * use um projeto de desenvolvimento, nunca o de produção.
+ * Integração contra um projeto Supabase DE TESTE (SUPABASE_TEST_*), nunca o de produção:
+ * grava clientes, operações e um usuário de Auth "@teste.local". Só roda com RUN_DB_TESTS=1.
+ * Limpeza: psql "$SUPABASE_TEST_DB_URL" -f scripts/limpar-dados-teste.sql
  */
-const disponivel = !!process.env.RUN_DB_TESTS && !!URL && !!SERVICE;
+const disponivel =
+  !!process.env.RUN_DB_TESTS && !!URL && !!SERVICE && URL !== process.env.SUPABASE_URL; // trava: nunca a URL de produção
 
 const meta = { origem: 'telegram' as const, mensagemTelegram: 'teste' };
 
@@ -35,10 +36,11 @@ describe.skipIf(!disponivel)('integração com Supabase local', () => {
   let hoje: string;
   let clienteId: string;
   const sufixo = Date.now().toString(36);
+  const cpfTeste = completarCpf(String(Date.now()).slice(-9));
 
   beforeAll(async () => {
     hoje = await repo.hoje();
-    const c = await repo.criarCliente({ nome: `Teste ${sufixo}`, apelidos: [`Zé Tést ${sufixo}`] });
+    const c = await repo.criarCliente({ nome: `Teste ${sufixo}`, apelidos: [`Zé Tést ${sufixo}`], documento: { tipo: 'cpf', numero: cpfTeste } });
     clienteId = c.id;
   });
 
@@ -152,6 +154,14 @@ describe.skipIf(!disponivel)('integração com Supabase local', () => {
     expect(await repo.consumirSessao(id)).toBe(true);
     expect(await repo.consumirSessao(id)).toBe(false);
     expect(await repo.obterSessao(id)).toBeNull();
+  });
+
+  it('documento é único e identifica o cliente', async () => {
+    expect((await repo.clientePorDocumento({ tipo: 'cpf', numero: cpfTeste }))?.id).toBe(clienteId);
+    await expect(repo.criarCliente({ nome: 'Outro Nome', documento: { tipo: 'cpf', numero: cpfTeste } })).rejects.toThrow(/documento/);
+    await repo.adicionarApelido(clienteId, 'Teste Apelido');
+    await repo.adicionarApelido(clienteId, 'teste apelido');
+    expect((await repo.cliente(clienteId))?.apelidos.filter((a) => a === 'Teste Apelido')).toHaveLength(1);
   });
 
   it('busca cliente por apelido sem acento', async () => {

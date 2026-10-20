@@ -7,14 +7,14 @@ export type Database = {
           Tables: {
             "clientes": {
                   Row: {
-                    "apelidos": (string)[],"ativo": boolean,"created_at": string,"id": string,"nome": string,"observacoes": string | null,"telefone": string | null,"updated_at": string
+                    "apelidos": (string)[],"ativo": boolean,"created_at": string,"documento": string | null,"documento_tipo": Database["public"]['Enums']["tipo_documento"] | null,"id": string,"nome": string,"observacoes": string | null,"telefone": string | null,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "apelidos"?: (string)[],"ativo"?: boolean,"created_at"?: string,"id"?: string,"nome": string,"observacoes"?: string | null,"telefone"?: string | null,"updated_at"?: string
+                    "apelidos"?: (string)[],"ativo"?: boolean,"created_at"?: string,"documento"?: string | null,"documento_tipo"?: Database["public"]['Enums']["tipo_documento"] | null,"id"?: string,"nome": string,"observacoes"?: string | null,"telefone"?: string | null,"updated_at"?: string
                   }
                   Update: {
-                    "apelidos"?: (string)[],"ativo"?: boolean,"created_at"?: string,"id"?: string,"nome"?: string,"observacoes"?: string | null,"telefone"?: string | null,"updated_at"?: string
+                    "apelidos"?: (string)[],"ativo"?: boolean,"created_at"?: string,"documento"?: string | null,"documento_tipo"?: Database["public"]['Enums']["tipo_documento"] | null,"id"?: string,"nome"?: string,"observacoes"?: string | null,"telefone"?: string | null,"updated_at"?: string
                   }
                   Relationships: [
                     
@@ -172,7 +172,7 @@ isOneToOne: false
                            },
 "buscar_clientes":
 { Args: { "p_limite"?: number,"p_termo": string }; Returns: {
-              "apelidos": (string)[],"id": string,"nome": string,"similaridade": number
+              "apelidos": (string)[],"documento": string,"documento_tipo": Database["public"]['Enums']["tipo_documento"],"id": string,"nome": string,"similaridade": number
             }[]
                            },
 "rpc_atualizar_status":
@@ -195,7 +195,7 @@ isOneToOne: false
                            }
           }
           Enums: {
-            "origem_lancamento": "telegram"|"web","periodicidade": "semanal"|"quinzenal"|"mensal","status_operacao": "ativa"|"quitada"|"atrasada"|"renegociada"|"perdida"|"cancelada","status_parcela": "aberta"|"parcial"|"paga"|"atrasada"|"cancelada","tipo_operacao": "unica"|"parcelada","tipo_regra_notificacao": "lembrete_antes"|"no_dia"|"atraso"|"resumo_diario"|"resumo_semanal"
+            "origem_lancamento": "telegram"|"web","periodicidade": "semanal"|"quinzenal"|"mensal","status_operacao": "ativa"|"quitada"|"atrasada"|"renegociada"|"perdida"|"cancelada","status_parcela": "aberta"|"parcial"|"paga"|"atrasada"|"cancelada","tipo_documento": "cpf"|"cnpj"|"rg"|"outro","tipo_operacao": "unica"|"parcelada","tipo_regra_notificacao": "lembrete_antes"|"no_dia"|"atraso"|"resumo_diario"|"resumo_semanal"
           }
           CompositeTypes: {
             [_ in never]: never
@@ -311,7 +311,7 @@ export type CompositeTypes<
 export const Constants = {
   "public": {
           Enums: {
-            "origem_lancamento": ["telegram", "web"],"periodicidade": ["semanal", "quinzenal", "mensal"],"status_operacao": ["ativa", "quitada", "atrasada", "renegociada", "perdida", "cancelada"],"status_parcela": ["aberta", "parcial", "paga", "atrasada", "cancelada"],"tipo_operacao": ["unica", "parcelada"],"tipo_regra_notificacao": ["lembrete_antes", "no_dia", "atraso", "resumo_diario", "resumo_semanal"]
+            "origem_lancamento": ["telegram", "web"],"periodicidade": ["semanal", "quinzenal", "mensal"],"status_operacao": ["ativa", "quitada", "atrasada", "renegociada", "perdida", "cancelada"],"status_parcela": ["aberta", "parcial", "paga", "atrasada", "cancelada"],"tipo_documento": ["cpf", "cnpj", "rg", "outro"],"tipo_operacao": ["unica", "parcelada"],"tipo_regra_notificacao": ["lembrete_antes", "no_dia", "atraso", "resumo_diario", "resumo_semanal"]
           }
         }
 } as const

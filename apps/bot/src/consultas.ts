@@ -1,5 +1,6 @@
 import {
   aReceberNoPeriodo,
+  formatarDocumento,
   calcularKpis,
   inicioSemana,
   listarAtrasados,
@@ -73,7 +74,7 @@ export function textoCliente(c: CarteiraCompleta, clienteId: string, hoje: DataI
     })
     .sort((a, b) => (a.vencimento < b.vencimento ? -1 : 1));
   const linhas = [
-    `👤 <b>${escapar(cli?.nome ?? '?')}</b>`,
+    `👤 <b>${escapar(cli?.nome ?? '?')}</b> · ${formatarDocumento(cli?.documento_tipo ?? null, cli?.documento ?? null)}`,
     `Saldo em aberto: <b>${f.dinheiro(m.saldoAtual)}</b>`,
     `Total emprestado: ${f.dinheiro(m.totalEmprestado)} · recebido: ${f.dinheiro(m.totalRecebido)}`,
     `Operações: ${m.operacoes} (${m.operacoesEmAberto} em aberto) · renegociações: ${m.renegociacoes}`,

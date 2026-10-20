@@ -51,14 +51,14 @@ cp .env.example .env   # preencha os valores
 | `BOT_MODO` | `polling` (dev) ou `webhook` (produção) |
 | `NOTIFICACOES_CRON` | `true` liga o agendador interno (a cada 15 min) |
 | `JOB_SECRET` | Protege `POST /jobs/notificacoes` (header `x-job-secret`) se você quiser acionar por fora |
+| `SUPABASE_DB_URL` | Connect → *Session pooler* (com a senha do banco). Usado por `db:push` e `db:types`. |
+| `SUPABASE_TEST_*` | Projeto Supabase separado para `pnpm test:db` |
 | `MOEDA`, `LOCALE`, `TIMEZONE` | Padrões. A tabela `configuracoes`, editável no painel, tem precedência. |
 | `BOT_DOMINIO` | Domínio do bot para o HTTPS automático do Caddy (só no docker-compose) |
 
 ### 2. Banco (Supabase na plataforma)
 
 ```bash
-supabase login
-pnpm db:link       # escolha o projeto
 pnpm db:push       # aplica as migrations (schema, RLS, RPCs, regras de notificação padrão)
 # opcional, só em projeto de desenvolvimento: dados fictícios
 pnpm db:seed
@@ -86,11 +86,11 @@ O bot em polling remove qualquer webhook registrado. Não rode em polling com o 
 ```bash
 pnpm test          # core (100% de linhas) + parser do bot + unitários
 pnpm test:llm      # parser contra a Claude API real (custa tokens; precisa de ANTHROPIC_API_KEY)
-pnpm test:db       # integração (db + fluxos do bot) contra o Supabase do .env
+pnpm test:db       # integração (db + fluxos do bot) contra o projeto de TESTE (SUPABASE_TEST_*)
 pnpm --filter @cobra/core coverage
 ```
 
-O `test:db` **grava dados de teste**: clientes desativados ao final, operações e um usuário de Auth `@teste.local`. Use um projeto de desenvolvimento, nunca o de produção.
+O `test:db` **grava dados de teste** (clientes, operações e um usuário de Auth `@teste.local`), por isso usa variáveis próprias `SUPABASE_TEST_*` e se recusa a rodar contra a URL de produção. Para limpar: `psql "<db url do projeto de teste>" -f scripts/limpar-dados-teste.sql`.
 
 As frases de exemplo do produto estão em `apps/bot/test/fixtures.ts`. Elas servem de resposta gravada nos testes determinísticos e de gabarito no `test:llm`.
 
@@ -143,6 +143,7 @@ Cada alerta de parcela traz botões: 💰 Recebido total · 🪙 Recebido parcia
 
 | Regra | Comportamento |
 |---|---|
+| Cliente | Nome + documento (CPF/CNPJ validados; RG ou outro com o tipo escrito antes). O documento é único: lançar com outro nome e o mesmo documento reaproveita o cliente e guarda o nome como apelido. |
 | Taxa efetiva mensal | Parcela única: `(total/principal)^(30/dias) − 1`. Parcelada: TIR mensal (base 30 dias). A taxa do período também é exibida. |
 | Parcelamento | N parcelas iguais (semanal, quinzenal ou mensal), com o ajuste de centavos na última. Principal e juros são divididos proporcionalmente. |
 | Alocação de pagamento | Proporcional entre principal e juros (padrão) ou juros primeiro, configurável. O excedente abate as próximas parcelas na ordem de vencimento, gerando várias linhas de pagamento com o mesmo `lote_id`. |

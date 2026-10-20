@@ -54,11 +54,11 @@ declare
   c_carlos uuid; c_ana uuid; c_bia uuid; c_joao uuid; c_marcos uuid;
   op uuid;
 begin
-  insert into clientes (nome, apelidos, telefone) values ('Carlos Souza', '{Carlão}', '+55 11 90000-0001') returning id into c_carlos;
-  insert into clientes (nome, apelidos) values ('Ana Paula', '{Aninha}') returning id into c_ana;
-  insert into clientes (nome, apelidos) values ('Beatriz Lima', '{Bia}') returning id into c_bia;
-  insert into clientes (nome, apelidos) values ('João Pedro', '{JP,Joãozinho}') returning id into c_joao;
-  insert into clientes (nome, apelidos, observacoes) values ('Marcos Silva', '{}', 'Indicado pelo Carlos') returning id into c_marcos;
+  insert into clientes (nome, apelidos, telefone, documento_tipo, documento) values ('Carlos Souza', '{Carlão}', '+55 11 90000-0001', 'cpf', '52998224725') returning id into c_carlos;
+  insert into clientes (nome, apelidos, documento_tipo, documento) values ('Ana Paula', '{Aninha}', 'cpf', '11144477735') returning id into c_ana;
+  insert into clientes (nome, apelidos, documento_tipo, documento) values ('Beatriz Lima', '{Bia}', 'rg', '123456789') returning id into c_bia;
+  insert into clientes (nome, apelidos, documento_tipo, documento) values ('João Pedro', '{JP,Joãozinho}', 'cnpj', '11222333000181') returning id into c_joao;
+  insert into clientes (nome, apelidos, observacoes, documento_tipo, documento) values ('Marcos Silva', '{}', 'Indicado pelo Carlos', 'outro', 'AB123456') returning id into c_marcos;
 
   -- Carlos: 2000 → 2400 em parcela única, vence em 3 semanas; pagou 1200
   op := pg_temp.seed_op(c_carlos, hoje - 35, 200000, 240000, 1, hoje + 21, interval '0');
