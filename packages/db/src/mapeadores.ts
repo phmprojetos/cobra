@@ -14,6 +14,7 @@ export type ParcelaRow = Tables<'parcelas'>;
 export type PagamentoRow = Tables<'pagamentos'>;
 export type EventoRow = Tables<'eventos'>;
 export type RegraRow = Tables<'regras_notificacao'>;
+export type DocumentoRow = Tables<'cliente_documentos'>;
 
 export function paraOperacao(r: OperacaoRow): OperacaoEstado {
   return {

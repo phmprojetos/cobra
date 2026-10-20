@@ -5,7 +5,27 @@ export type Database = {
   
   "public": {
           Tables: {
-            "clientes": {
+            "cliente_documentos": {
+                  Row: {
+                    "caminho": string,"cliente_id": string,"created_at": string,"id": string,"nome_arquivo": string,"origem": Database["public"]['Enums']["origem_lancamento"],"removido_em": string | null,"tamanho_bytes": number,"tipo_mime": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "caminho": string,"cliente_id": string,"created_at"?: string,"id"?: string,"nome_arquivo": string,"origem"?: Database["public"]['Enums']["origem_lancamento"],"removido_em"?: string | null,"tamanho_bytes": number,"tipo_mime": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "caminho"?: string,"cliente_id"?: string,"created_at"?: string,"id"?: string,"nome_arquivo"?: string,"origem"?: Database["public"]['Enums']["origem_lancamento"],"removido_em"?: string | null,"tamanho_bytes"?: number,"tipo_mime"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "cliente_documentos_cliente_id_fkey"
+      columns: ["cliente_id"]
+isOneToOne: false
+      referencedRelation: "clientes"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"clientes": {
                   Row: {
                     "apelidos": (string)[],"ativo": boolean,"created_at": string,"documento": string | null,"documento_tipo": Database["public"]['Enums']["tipo_documento"] | null,"id": string,"nome": string,"observacoes": string | null,"telefone": string | null,"updated_at": string
                   }

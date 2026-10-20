@@ -1,9 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { useActionState, useState } from 'react';
+import { useActionState, useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { mascararTelefone } from '@cobra/core';
-import { AlertTriangle, Loader2, Save } from 'lucide-react';
+import { AlertTriangle, FileUp, Loader2, Save } from 'lucide-react';
+import { ACCEPT, formatarBytes } from '@/lib/documentos';
+import { enviarDocumentos, ListaEnvio, type ItemEnvio } from './envio-documentos';
 import { salvarCliente, type EstadoCliente } from '@/app/(painel)/clientes/acoes';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -47,6 +50,20 @@ function Campo({ id, rotulo, obrigatorio, erro, dica, children }: { id: string; 
 
 export function FormularioCliente({ valores = {}, cancelarHref }: { valores?: ValoresCliente; cancelarHref: string }) {
   const [estado, acao, pendente] = useActionState<EstadoCliente | null, FormData>(salvarCliente, null);
+  const router = useRouter();
+  // Arquivos escolhidos no cadastro: enviados depois que o cliente existe (precisa do id).
+  const [arquivos, setArquivos] = useState<File[]>([]);
+  const [envio, setEnvio] = useState<ItemEnvio[]>([]);
+  const inputArquivos = useRef<HTMLInputElement>(null);
+  const criadoId = estado?.criadoId;
+  useEffect(() => {
+    if (!criadoId) return;
+    void (async () => {
+      const itens = arquivos.length ? await enviarDocumentos(criadoId, arquivos, setEnvio) : [];
+      const falhas = itens.filter((i) => i.estado === 'erro').length;
+      router.push(`/clientes/${criadoId}?criado=1${falhas ? `&falhas=${falhas}` : ''}`);
+    })();
+  }, [criadoId]);
   const e = estado?.campos ?? {};
   // Depois de um envio com erro, reexibe o que foi digitado (o React limpa o form após a action).
   const v = estado?.valores;
@@ -115,6 +132,48 @@ export function FormularioCliente({ valores = {}, cancelarHref }: { valores?: Va
           </Campo>
         </div>
 
+        {!valores.id && (
+          <div className="md:col-span-2">
+            <Campo id="arquivos" rotulo="Documentos (PDF ou imagem)" dica="RG, CPF, comprovante de residência… Até 10 MB cada. Também dá para enviar depois, pela ficha do cliente.">
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={() => inputArquivos.current?.click()}
+                  className="hover:bg-muted/50 flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed px-3 py-4 text-sm"
+                >
+                  <FileUp className="text-muted-foreground size-4" aria-hidden /> Escolher arquivos
+                </button>
+                <input
+                  ref={inputArquivos}
+                  id="arquivos"
+                  type="file"
+                  accept={ACCEPT}
+                  multiple
+                  hidden
+                  onChange={(ev) => setArquivos((atual) => [...atual, ...(ev.target.files ? [...ev.target.files] : [])])}
+                />
+                {envio.length > 0 ? (
+                  <ListaEnvio itens={envio} />
+                ) : (
+                  arquivos.length > 0 && (
+                    <ul className="space-y-1 text-sm">
+                      {arquivos.map((f, i) => (
+                        <li key={i} className="flex items-center gap-2">
+                          <span className="truncate">{f.name}</span>
+                          <span className="text-muted-foreground text-xs">{formatarBytes(f.size)}</span>
+                          <button type="button" className="text-muted-foreground hover:text-atraso ml-auto text-xs" onClick={() => setArquivos((a) => a.filter((_, j) => j !== i))}>
+                            remover
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )
+                )}
+              </div>
+            </Campo>
+          </div>
+        )}
+
         <div className="md:col-span-2">
           <Campo id="observacoes" rotulo="Observações">
             <textarea
@@ -134,8 +193,8 @@ export function FormularioCliente({ valores = {}, cancelarHref }: { valores?: Va
         <Button nativeButton={false} variant="ghost" render={<Link href={cancelarHref} />}>
           Cancelar
         </Button>
-        <Button type="submit" disabled={pendente}>
-          {pendente ? <Loader2 className="animate-spin" /> : <Save />}
+        <Button type="submit" disabled={pendente || !!criadoId}>
+          {pendente || criadoId ? <Loader2 className="animate-spin" /> : <Save />}
           {valores.id ? 'Salvar alterações' : 'Cadastrar cliente'}
         </Button>
       </div>

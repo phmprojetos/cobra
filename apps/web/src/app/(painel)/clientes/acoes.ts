@@ -16,6 +16,8 @@ export interface EstadoCliente {
   valores?: Record<string, string>;
   /** Muda a cada envio: remonta o formulário com os valores devolvidos. */
   envio?: number;
+  /** Cliente criado: o navegador envia os documentos escolhidos e então abre a ficha. */
+  criadoId?: string;
 }
 
 interface Dados {
@@ -69,7 +71,8 @@ async function processar(form: FormData): Promise<EstadoCliente> {
       destino = `/clientes/${id}?salvo=1`;
     } else {
       const novo = await repo.criarCliente(dados);
-      destino = `/clientes/${novo.id}?criado=1`;
+      revalidatePath('/clientes');
+      return { criadoId: novo.id };
     }
   } catch (e) {
     if (e instanceof ErroRegra) return { erro: e.message };

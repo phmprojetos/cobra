@@ -178,6 +178,63 @@ export class Repositorio {
     semErro(await this.db.from('clientes').update({ apelidos: [...c.apelidos, novo] }).eq('id', clienteId));
   }
 
+  // ───────────── documentos do cliente (Storage privado) ─────────────
+
+  static readonly BUCKET_DOCUMENTOS = 'documentos-clientes';
+
+  /** Gera uma URL de envio assinada (uso único) para o navegador enviar direto ao Storage. */
+  async prepararEnvioDocumento(caminho: string): Promise<{ caminho: string; token: string }> {
+    const r = await this.db.storage.from(Repositorio.BUCKET_DOCUMENTOS).createSignedUploadUrl(caminho);
+    if (r.error) throw new ErroBanco(r.error.message);
+    return { caminho: r.data.path, token: r.data.token };
+  }
+
+  /** Confere que o arquivo chegou ao Storage e devolve tamanho/tipo reais (não confia no navegador). */
+  async metadadosArquivo(caminho: string): Promise<{ tamanho: number; tipo: string } | null> {
+    const pasta = caminho.split('/').slice(0, -1).join('/');
+    const nome = caminho.split('/').pop()!;
+    const r = await this.db.storage.from(Repositorio.BUCKET_DOCUMENTOS).list(pasta, { search: nome, limit: 5 });
+    if (r.error) throw new ErroBanco(r.error.message);
+    const f = r.data.find((x) => x.name === nome);
+    if (!f) return null;
+    const meta = (f.metadata ?? {}) as { size?: number; mimetype?: string };
+    return { tamanho: meta.size ?? 0, tipo: meta.mimetype ?? '' };
+  }
+
+  async registrarDocumento(d: { clienteId: string; caminho: string; nome: string; tipo: string; tamanho: number; origem?: 'web' | 'telegram' }) {
+    return ok(
+      await this.db
+        .from('cliente_documentos')
+        .insert({ cliente_id: d.clienteId, caminho: d.caminho, nome_arquivo: d.nome, tipo_mime: d.tipo, tamanho_bytes: d.tamanho, origem: d.origem ?? 'web' })
+        .select('*')
+        .single(),
+    );
+  }
+
+  async documentosDoCliente(clienteId: string) {
+    return ok(
+      await this.db
+        .from('cliente_documentos')
+        .select('*')
+        .eq('cliente_id', clienteId)
+        .is('removido_em', null)
+        .order('created_at', { ascending: false }),
+    );
+  }
+
+  /** URLs temporárias (bucket privado): visualizar e baixar. */
+  async urlsDocumento(caminho: string, nome: string, segundos = 300): Promise<{ ver: string; baixar: string }> {
+    const b = this.db.storage.from(Repositorio.BUCKET_DOCUMENTOS);
+    const [ver, baixar] = await Promise.all([b.createSignedUrl(caminho, segundos), b.createSignedUrl(caminho, segundos, { download: nome })]);
+    if (ver.error || baixar.error) throw new ErroBanco((ver.error ?? baixar.error)!.message);
+    return { ver: ver.data.signedUrl, baixar: baixar.data.signedUrl };
+  }
+
+  /** Remoção lógica: some da lista, o arquivo continua guardado. */
+  async removerDocumento(id: string, clienteId: string): Promise<void> {
+    semErro(await this.db.from('cliente_documentos').update({ removido_em: new Date().toISOString() }).eq('id', id).eq('cliente_id', clienteId));
+  }
+
   // ───────────── carteira ─────────────
 
   /** Carrega operações (canceladas só por id), parcelas e pagamentos. Volume de um usuário cabe em memória. */

@@ -146,6 +146,7 @@ No chat privado (sem canal), cada alerta de parcela traz botões: 💰 Recebido 
 | Regra | Comportamento |
 |---|---|
 | Cliente | Nome + documento (CPF/CNPJ validados; RG ou outro com o tipo escrito antes). O documento é único: lançar com outro nome e o mesmo documento reaproveita o cliente e guarda o nome como apelido. |
+| Documentos do cliente | PDF/JPG/PNG/WEBP/HEIC até 10 MB no Supabase Storage (bucket **privado** `documentos-clientes`). O navegador envia direto ao Storage por URL assinada de uso único (evita o limite de 4,5 MB da Vercel); o servidor confere tipo/tamanho reais e registra em `cliente_documentos`. Visualização por links que expiram em 5 min. Remover é lógico. |
 | Taxa efetiva mensal | Parcela única: `(total/principal)^(30/dias) − 1`. Parcelada: TIR mensal (base 30 dias). A taxa do período também é exibida. |
 | Parcelamento | N parcelas iguais (semanal, quinzenal ou mensal), com o ajuste de centavos na última. Principal e juros são divididos proporcionalmente. |
 | Alocação de pagamento | Proporcional entre principal e juros (padrão) ou juros primeiro, configurável. O excedente abate as próximas parcelas na ordem de vencimento, gerando várias linhas de pagamento com o mesmo `lote_id`. |

@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft, Banknote, CalendarX2, CheckCircle2, FileText, Gauge, HandCoins, Pencil, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { DocumentosCliente } from '@/components/clientes/documentos-cliente';
 import { formatarDocumento, metricasCliente } from '@cobra/core';
 import { Avatar, BarraProgresso, KpiCard, Secao, tomPontualidade, Vazio } from '@/components/painel/ui';
 import { StatusBadge } from '@/components/status';
@@ -10,7 +11,7 @@ import { cn } from '@/lib/utils';
 
 export default async function Cliente({ params, searchParams }: PageProps<'/clientes/[id]'>) {
   const { id } = await params;
-  const { criado, salvo } = await searchParams;
+  const { criado, salvo, falhas } = await searchParams;
   const { repo, hoje, fmt } = await carregarPainel();
   const c = await repo.carregarCarteira({ clienteId: id });
   const cliente = c.clientes.get(id);
@@ -48,6 +49,11 @@ export default async function Cliente({ params, searchParams }: PageProps<'/clie
             <CheckCircle2 className="size-4" aria-hidden /> {criado ? 'Cliente cadastrado. Lance empréstimos para ele pelo Telegram.' : 'Alterações salvas.'}
           </p>
         )}
+        {falhas && (
+          <p className="border-atraso-fill/30 bg-atraso-fill/10 text-atraso rounded-lg border px-3 py-2 text-sm" role="alert">
+            {falhas} documento(s) não foram enviados. Tente de novo na seção Documentos.
+          </p>
+        )}
       </div>
 
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -64,6 +70,8 @@ export default async function Cliente({ params, searchParams }: PageProps<'/clie
           detalhe={`atraso médio ${m.atrasoMedioDias === null ? '—' : `${m.atrasoMedioDias.toFixed(1)} dias`} · ${m.renegociacoes} renegociação(ões)`}
         />
       </section>
+
+      <DocumentosCliente clienteId={id} />
 
       <Secao titulo="Contratos" semPadding>
         {c.operacoes.length === 0 ? (
