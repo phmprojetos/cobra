@@ -1,0 +1,15 @@
+{
+  "name": "@cobra/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@cobra/core": "workspace:*",
+    "@supabase/supabase-js": "^2"
+  }
+}
