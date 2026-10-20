@@ -134,7 +134,18 @@ const ESTADOS_TEXTO = [
   'rascunho',
   'aguardando_cliente_editar',
   'aguardando_valor_edicao',
+  'aguardando_devedor',
+  'aguardando_valor_pagamento',
 ];
+
+/** Pagamento sendo montado: o que já se sabe (valor/data podem vir da frase ou do atalho). */
+interface PagamentoEmAndamento {
+  nome?: string;
+  valor?: number | null;
+  data?: string | null;
+  forma?: string | null;
+  texto: string;
+}
 
 const centavos = (reais: number): Centavos => Math.round(reais * 100);
 
@@ -275,8 +286,14 @@ export class Aplicacao {
           await this.avisarCanal({ texto: '🔔 Teste do canal de alertas: tudo certo.' });
           return [{ texto: `🔔 Alertas indo para <b>${escapar(canal.titulo)}</b>. Mandei uma mensagem de teste lá.` }];
         }
-        case 'novo':
         case 'pagar': {
+          if (!args.trim()) return this.fluxoPagamento(userId, { texto: '/pagar' });
+          const r = parsePagar(args, hoje);
+          // "/pagar Carlos" (sem valor): escolhe contrato e pergunta o valor
+          if ('erro' in r) return /\d/.test(args) ? [{ texto: r.erro }] : this.fluxoPagamento(userId, { nome: args.trim(), texto: `/pagar ${args}` });
+          return this.processar(userId, r, `/pagar ${args}`);
+        }
+        case 'novo': {
           if (!args.trim()) {
             await this.repo.criarSessao(userId, nome === 'novo' ? 'aguardando_novo' : 'aguardando_pagar', {});
             return [
@@ -335,6 +352,12 @@ export class Aplicacao {
           return this.confirmarMesmoCliente(userId, id);
         case 'uc':
           return this.usarUltimoCliente(userId, id);
+        case 'pc':
+          return this.pagamentoClienteEscolhido(userId, id, Number(extra));
+        case 'po':
+          return this.pagamentoContratoEscolhido(userId, id, Number(extra));
+        case 'pv':
+          return this.pagamentoValorRapido(userId, id, extra === 'q' ? 'q' : 'p');
         case 'em':
           return this.menuEdicao(id, true);
         case 'ec':
@@ -371,6 +394,14 @@ export class Aplicacao {
         return [{ texto: escapar(r.dados.pergunta) }];
       case 'consultar':
         return this.consultar(r);
+      case 'registrar_pagamento':
+        return this.fluxoPagamento(userId, {
+          ...(r.dados.cliente ? { nome: r.dados.cliente } : {}),
+          valor: r.dados.valor,
+          data: r.dados.data,
+          forma: r.dados.forma,
+          texto,
+        });
       case 'editar_cliente': {
         const campo = r.dados.campo === 'indefinido' ? null : r.dados.campo;
         return this.iniciarEdicao(userId, r.dados.cliente, campo, r.dados.valor);
@@ -611,17 +642,7 @@ export class Aplicacao {
       }
       case 'registrar_pagamento': {
         const d = intencao.dados;
-        const plano = await planejarPagamento(this.repo, {
-          clienteId: cliente.id,
-          valor: centavos(d.valor),
-          data: d.data,
-          forma: d.forma,
-        });
-        if (plano.excedente > 0) {
-          const f = await this.fmt();
-          return [{ texto: `⚠️ ${f.dinheiro(plano.valor)} é mais que o saldo em aberto de <b>${escapar(cliente.nome)}</b> (${f.dinheiro(plano.valor - plano.excedente)}).` }];
-        }
-        return this.pedirConfirmacao(userId, { acao: 'pagamento', plano, intencao, texto });
+        return this.escolherContrato(userId, cliente.id, { valor: d.valor, data: d.data, forma: d.forma, texto });
       }
       case 'prorrogar': {
         const parcelas = await parcelasEmAbertoDoCliente(this.repo, cliente.id);
@@ -830,6 +851,14 @@ export class Aplicacao {
         const { parcelaId } = payload as { parcelaId: string };
         return this.planejarAdiamento(userId, parcelaId, data, `Adiar para ${texto}`);
       }
+      case 'aguardando_devedor':
+        return this.fluxoPagamento(userId, { ...(payload as Omit<PagamentoEmAndamento, 'nome'>), nome: texto.trim() });
+      case 'aguardando_valor_pagamento': {
+        const p = payload as PagamentoEmAndamento & { operacaoId: string };
+        const valor = parseValor(texto);
+        if (!valor || valor <= 0) return null;
+        return this.planejarPagamentoContrato(userId, p.operacaoId, { ...p, valor: valor / 100 });
+      }
       case 'aguardando_cliente_editar':
         return this.iniciarEdicao(userId, texto.trim(), null, null);
       case 'aguardando_valor_edicao': {
@@ -914,6 +943,157 @@ export class Aplicacao {
   private async planejarAdiamento(userId: number, parcelaId: string, data: DataISO, texto: string): Promise<Resposta[]> {
     const plano = await planejarRenegociacao(this.repo, { parcelaId, novoVencimento: data });
     return this.pedirConfirmacao(userId, { acao: 'renegociacao', plano, intencao: null, texto });
+  }
+
+  // ─────────────────────────── pagamento guiado ───────────────────────────
+  // Quem paga → qual contrato → quanto → resumo ✅. Passos já informados são pulados.
+
+  /** Contratos em aberto do cliente, com próxima parcela e saldo (mais antigos primeiro). */
+  private async contratosAbertos(clienteId: string) {
+    const c = await this.repo.carregarCarteira({ clienteId });
+    const hoje = await this.repo.hoje();
+    return c.operacoes
+      .filter((o) => ['ativa', 'atrasada', 'renegociada'].includes(o.status))
+      .map((o) => {
+        const ps = c.carteira.parcelas.filter((p) => p.operacaoId === o.id).sort((a, b) => a.numero - b.numero);
+        const abertas = ps.filter((p) => saldoParcela(p).total > 0).sort((a, b) => (a.vencimento < b.vencimento ? -1 : 1));
+        const prox = abertas[0];
+        return {
+          op: o,
+          total: ps.length,
+          proxima: prox ?? null,
+          saldoProxima: prox ? saldoParcela(prox).total : 0,
+          saldo: abertas.reduce((a, p) => a + saldoParcela(p).total, 0),
+          atrasado: !!prox && prox.vencimento < hoje,
+        };
+      })
+      .filter((x) => x.saldo > 0)
+      .sort((a, b) => (a.op.data_emprestimo < b.op.data_emprestimo ? -1 : 1));
+  }
+
+  private rotuloContrato(k: Awaited<ReturnType<Aplicacao['contratosAbertos']>>[number], f: Formatador, curto = false): string {
+    const venc = k.proxima ? `${k.atrasado ? '🔴 venceu' : 'vence'} ${f.data(k.proxima.vencimento)}${k.total > 1 ? ` (${k.proxima.numero}/${k.total})` : ''}` : '';
+    if (curto) return `${f.dinheiro(k.op.valor_principal)}→${f.dinheiro(k.op.valor_total_receber)} · ${venc} · aberto ${f.dinheiro(k.saldo)}`;
+    return `Empréstimo de ${f.data(k.op.data_emprestimo)}: ${f.dinheiro(k.op.valor_principal)} → ${f.dinheiro(k.op.valor_total_receber)}\n${venc} · em aberto <b>${f.dinheiro(k.saldo)}</b>`;
+  }
+
+  /** Passo 1: quem está pagando. Sem nome: lista os devedores (atrasados primeiro). */
+  private async fluxoPagamento(userId: number, p: PagamentoEmAndamento): Promise<Resposta[]> {
+    if (p.nome) {
+      const doc = /\d{3}/.test(p.nome) ? parseDocumento(p.nome) : null;
+      const porDoc = doc && !('erro' in doc) ? await this.repo.clientePorDocumento(doc) : null;
+      if (porDoc) return this.escolherContrato(userId, porDoc.id, p);
+      const res = resolverCliente(p.nome, await this.repo.listarClientes());
+      if (res.tipo === 'unico') return this.escolherContrato(userId, res.cliente.id, p);
+      const opcoes = res.tipo === 'ambiguo' ? res.opcoes : (await this.repo.buscarClientes(p.nome, 5)).filter((c) => c.similaridade >= 0.25);
+      if (opcoes.length === 0) return [{ texto: `Não encontrei <b>${escapar(p.nome)}</b>. Veja /clientes.` }];
+      return this.perguntarDevedor(userId, p, opcoes.map((o) => ({ id: o.id, rotulo: rotuloCliente(o) })), `Qual <b>${escapar(p.nome)}</b>?`);
+    }
+    const c = await this.repo.carregarCarteira();
+    const hoje = await this.repo.hoje();
+    const f = await this.fmt();
+    const porCliente = new Map<string, { saldo: number; venc: string }>();
+    for (const parc of c.carteira.parcelas) {
+      const op = c.carteira.operacoes.find((o) => o.id === parc.operacaoId)!;
+      const s = saldoParcela(parc).total;
+      if (s === 0 || !['ativa', 'atrasada', 'renegociada'].includes(op.status)) continue;
+      const atual = porCliente.get(op.clienteId) ?? { saldo: 0, venc: '9999-12-31' };
+      porCliente.set(op.clienteId, { saldo: atual.saldo + s, venc: parc.vencimento < atual.venc ? parc.vencimento : atual.venc });
+    }
+    if (porCliente.size === 0) return [{ texto: 'Ninguém está devendo no momento. ✅' }];
+    const devedores = [...porCliente.entries()]
+      .sort((a, b) => (a[1].venc < b[1].venc ? -1 : a[1].venc > b[1].venc ? 1 : b[1].saldo - a[1].saldo))
+      .slice(0, 10)
+      .map(([id, v]) => ({ id, rotulo: `${v.venc < hoje ? '🔴 ' : ''}${c.clientes.get(id)?.nome ?? '?'} · ${f.dinheiro(v.saldo)}` }));
+    await this.repo.criarSessao(userId, 'aguardando_devedor', { valor: p.valor ?? null, data: p.data ?? null, forma: p.forma ?? null, texto: p.texto });
+    return this.perguntarDevedor(userId, p, devedores, '💰 <b>Quem está pagando?</b>\nToque no cliente ou digite o nome/documento.');
+  }
+
+  private async perguntarDevedor(userId: number, p: PagamentoEmAndamento, opcoes: { id: string; rotulo: string }[], pergunta: string): Promise<Resposta[]> {
+    const sid = await this.repo.criarSessao(userId, 'pagar_cliente', { ...p, ids: opcoes.map((o) => o.id) });
+    return [{ texto: pergunta, teclado: [...opcoes.map((o, i) => [{ texto: o.rotulo, dados: `pc:${sid}:${i}` }]), [{ texto: '❌ Cancelar', dados: `x:${sid}` }]] }];
+  }
+
+  private async pagamentoClienteEscolhido(userId: number, sid: string, i: number): Promise<Resposta[]> {
+    const s = await this.repo.obterSessao(sid);
+    if (!s || !(await this.repo.consumirSessao(sid))) return [{ texto: '⌛ Esta pergunta expirou. Envie /pagar de novo.', editarOriginal: true }];
+    await this.limparEsperas(userId); // descarta o "digite o nome" pendente
+    const p = s.payload as PagamentoEmAndamento & { ids: string[] };
+    const id = p.ids[i];
+    const cliente = id ? await this.repo.cliente(id) : null;
+    if (!cliente) return [];
+    return [{ texto: `👤 ${escapar(cliente.nome)}`, editarOriginal: true }, ...(await this.escolherContrato(userId, cliente.id, p))];
+  }
+
+  /** Passo 2: qual contrato. Um só: segue direto (mostrando qual é). */
+  private async escolherContrato(userId: number, clienteId: string, p: PagamentoEmAndamento): Promise<Resposta[]> {
+    const cliente = await this.repo.cliente(clienteId);
+    await this.lembrarCliente(userId, { id: clienteId, nome: cliente?.nome ?? '' });
+    const contratos = await this.contratosAbertos(clienteId);
+    const nome = escapar(cliente?.nome ?? '');
+    if (contratos.length === 0) return [{ texto: `${nome} não tem contratos em aberto.` }];
+    if (contratos.length === 1) return this.planejarPagamentoContrato(userId, contratos[0]!.op.id, p);
+    const f = await this.fmt();
+    const sid = await this.repo.criarSessao(userId, 'pagar_contrato', { ...p, ops: contratos.map((k) => k.op.id) });
+    return [
+      {
+        texto: `📄 <b>${nome}</b> tem ${contratos.length} contratos em aberto. Qual está pagando?\n\n${contratos.map((k, i) => `${i + 1}. ${this.rotuloContrato(k, f)}`).join('\n\n')}`,
+        teclado: [...contratos.map((k, i) => [{ texto: `${i + 1}. ${this.rotuloContrato(k, f, true)}`, dados: `po:${sid}:${i}` }]), [{ texto: '❌ Cancelar', dados: `x:${sid}` }]],
+      },
+    ];
+  }
+
+  private async pagamentoContratoEscolhido(userId: number, sid: string, i: number): Promise<Resposta[]> {
+    const s = await this.repo.obterSessao(sid);
+    if (!s || !(await this.repo.consumirSessao(sid))) return [{ texto: '⌛ Esta pergunta expirou. Envie /pagar de novo.', editarOriginal: true }];
+    const p = s.payload as PagamentoEmAndamento & { ops: string[] };
+    const opId = p.ops[i];
+    if (!opId) return [];
+    return [{ texto: `📄 Contrato ${i + 1}`, editarOriginal: true }, ...(await this.planejarPagamentoContrato(userId, opId, p))];
+  }
+
+  /** Passo 3: valor (se ainda não informado) e passo 4: resumo para confirmar. */
+  private async planejarPagamentoContrato(userId: number, operacaoId: string, p: PagamentoEmAndamento): Promise<Resposta[]> {
+    const f = await this.fmt();
+    if (p.valor == null) {
+      const c = await this.repo.carregarCarteira({ operacaoId });
+      const op = c.operacoes[0]!;
+      const k = (await this.contratosAbertos(op.cliente_id)).find((x) => x.op.id === operacaoId);
+      if (!k) return [{ texto: 'Este contrato não tem saldo em aberto.' }];
+      const sid = await this.repo.criarSessao(userId, 'aguardando_valor_pagamento', { ...p, operacaoId });
+      const botoes: Botao[][] = [[{ texto: `Parcela atual · ${f.dinheiro(k.saldoProxima)}`, dados: `pv:${sid}:p` }]];
+      if (k.saldo !== k.saldoProxima) botoes.push([{ texto: `Quitar contrato · ${f.dinheiro(k.saldo)}`, dados: `pv:${sid}:q` }]);
+      botoes.push([{ texto: '❌ Cancelar', dados: `x:${sid}` }]);
+      return [
+        {
+          texto: `💰 <b>${escapar(c.clientes.get(op.cliente_id)?.nome ?? '')}</b>\n${this.rotuloContrato(k, f)}\n\nQuanto foi pago? Toque numa opção ou digite o valor.`,
+          teclado: botoes,
+        },
+      ];
+    }
+    const plano = await planejarPagamento(this.repo, {
+      operacaoId,
+      valor: centavos(p.valor),
+      ...(p.data ? { data: p.data } : {}),
+      forma: p.forma ?? null,
+    });
+    if (plano.excedente > 0) {
+      return [{ texto: `⚠️ ${f.dinheiro(plano.valor)} é mais que o saldo em aberto deste contrato (${f.dinheiro(plano.valor - plano.excedente)}).` }];
+    }
+    return this.pedirConfirmacao(userId, { acao: 'pagamento', plano, intencao: null, texto: p.texto });
+  }
+
+  private async pagamentoValorRapido(userId: number, sid: string, tipo: 'p' | 'q'): Promise<Resposta[]> {
+    const s = await this.repo.obterSessao(sid);
+    if (!s || s.estado !== 'aguardando_valor_pagamento' || !(await this.repo.consumirSessao(sid))) {
+      return [{ texto: '⌛ Esta pergunta expirou. Envie /pagar de novo.', editarOriginal: true }];
+    }
+    const p = s.payload as PagamentoEmAndamento & { operacaoId: string };
+    const c = await this.repo.carregarCarteira({ operacaoId: p.operacaoId });
+    const k = (await this.contratosAbertos(c.operacoes[0]!.cliente_id)).find((x) => x.op.id === p.operacaoId);
+    if (!k) return [{ texto: 'Este contrato não tem saldo em aberto.' }];
+    const valor = (tipo === 'q' ? k.saldo : k.saldoProxima) / 100;
+    return this.planejarPagamentoContrato(userId, p.operacaoId, { ...p, valor });
   }
 
   // ─────────────────────────── edição de cliente ───────────────────────────

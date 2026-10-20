@@ -1,4 +1,4 @@
-import { CONFIG_PADRAO, type ClienteRow, type Repositorio, type SessaoBot } from '@cobra/db';
+import { CONFIG_PADRAO, paraOperacao, paraParcela, type ClienteRow, type OperacaoRow, type ParcelaRow, type Repositorio, type SessaoBot } from '@cobra/db';
 import { normalizarNome, type Documento } from '@cobra/core';
 import { describe, expect, it } from 'vitest';
 import { Aplicacao } from '../src/aplicacao';
@@ -11,8 +11,27 @@ import { HOJE_FIXO, PARCIAIS } from './fixtures';
 class RepoMemoria {
   sessoes = new Map<string, SessaoBot & { criada: number }>();
   clientes: ClienteRow[] = [];
+  operacoes: OperacaoRow[] = [];
+  parcelas: ParcelaRow[] = [];
   private seq = 0;
-  readonly db = null;
+  /** Só o necessário para planejarPagamento (consulta de renegociações). */
+  readonly db = {
+    from: () => ({
+      select: () => ({ in: async (_c: string, ids: string[]) => ({ data: this.operacoes.filter((o) => ids.includes(o.id)), error: null }) }),
+    }),
+  };
+  async carregarCarteira(filtro: { clienteId?: string; operacaoId?: string } = {}) {
+    const operacoes = this.operacoes.filter((o) => (!filtro.clienteId || o.cliente_id === filtro.clienteId) && (!filtro.operacaoId || o.id === filtro.operacaoId));
+    const ids = new Set(operacoes.map((o) => o.id));
+    const parcelas = this.parcelas.filter((p) => ids.has(p.operacao_id));
+    return {
+      clientes: new Map(this.clientes.map((c) => [c.id, c])),
+      operacoes,
+      parcelas,
+      pagamentos: [],
+      carteira: { operacoes: operacoes.map(paraOperacao), parcelas: parcelas.map(paraParcela), pagamentos: [] },
+    };
+  }
   relogio = () => new Date();
   async configuracao() {
     return CONFIG_PADRAO;
@@ -243,5 +262,86 @@ describe('documento repetido com outro nome e /editar', () => {
   it('"/editar" sem nome pergunta o cliente', async () => {
     expect(textos(await app.comando(U, 'editar', ''))).toContain('Qual cliente você quer editar?');
     expect(textos(await app.mensagem(U, 'Pedro'))).toContain('Editar cadastro');
+  });
+});
+
+describe('pagamento guiado: quem paga → qual contrato → quanto', () => {
+  const agora = '2026-10-20T00:00:00Z';
+  const op = (id: string, cliente: string, data: string, principal: number, total: number): OperacaoRow => ({
+    id, cliente_id: cliente, data_emprestimo: data, valor_principal: principal, valor_total_receber: total, juros_total: total - principal,
+    taxa_periodo: 0.3, taxa_efetiva_mensal: 0.1, tipo: 'parcelada', periodicidade: 'mensal', status: 'ativa', renegociacoes: 0, valor_prejuizo: 0,
+    perdida_em: null, cancelado_em: null, observacoes: null, origem: 'telegram', mensagem_origem_id: null, created_at: agora, updated_at: agora,
+  });
+  const par = (id: string, opId: string, numero: number, venc: string, valor: number, principal: number): ParcelaRow => ({
+    id, operacao_id: opId, numero, vencimento: venc, valor, valor_principal: principal, valor_juros: valor - principal,
+    valor_pago: 0, principal_pago: 0, juros_pago: 0, status: 'aberta', cancelado_em: null, created_at: agora, updated_at: agora,
+  });
+
+  async function montar() {
+    const repo = new RepoMemoria();
+    const pedro = await repo.criarCliente({ nome: 'Pedro', documento: { tipo: 'cpf', numero: '11219819417' } });
+    const ana = await repo.criarCliente({ nome: 'Ana Paula', documento: { tipo: 'cpf', numero: '52998224725' } });
+    repo.operacoes.push(op('o1', pedro.id, '2026-09-01', 100000, 130000), op('o2', pedro.id, '2026-10-10', 50000, 60000), op('o3', ana.id, '2026-10-01', 80000, 100000));
+    repo.parcelas.push(
+      par('p1', 'o1', 1, '2026-10-01', 65000, 50000), // atrasada
+      par('p2', 'o1', 2, '2026-11-01', 65000, 50000),
+      par('p3', 'o2', 1, '2026-11-10', 60000, 50000),
+      par('p4', 'o3', 1, '2026-11-20', 100000, 80000),
+    );
+    const ia = new IAFake({ 'ana pagou 300': { tipo: 'registrar_pagamento', dados: { cliente: 'Ana Paula', valor: 300, data: null, forma: 'pix' } } });
+    return { repo, app: new Aplicacao(repo as unknown as Repositorio, ia, { info: () => {}, error: (e) => console.error(e) }) };
+  }
+
+  it('/pagar lista os devedores (atrasados primeiro) e os contratos do escolhido', async () => {
+    const { app } = await montar();
+    const r1 = await app.comando(U, 'pagar', '');
+    expect(textos(r1)).toContain('Quem está pagando?');
+    const rotulos = r1[0]!.teclado!.flat().map((b) => b.texto);
+    expect(rotulos[0]).toBe('🔴 Pedro · R$ 1.900,00');
+    expect(rotulos[1]).toBe('Ana Paula · R$ 1.000,00');
+
+    const r2 = await app.callback(U, botao(r1, 'pc:')!.dados); // Pedro
+    expect(textos(r2)).toContain('<b>Pedro</b> tem 2 contratos em aberto');
+    expect(textos(r2)).toContain('🔴 venceu 01/10');
+    expect(textos(r2)).toContain('em aberto <b>R$ 1.300,00</b>');
+
+    const r3 = await app.callback(U, botao(r2, 'po:')!.dados); // contrato 1 (o1)
+    expect(textos(r3)).toContain('Quanto foi pago?');
+    const opcoes = r3.flatMap((x) => x.teclado ?? []).flat().map((b) => b.texto);
+    expect(opcoes).toEqual(expect.arrayContaining(['Parcela atual · R$ 650,00', 'Quitar contrato · R$ 1.300,00']));
+
+    const quitar = r3.flatMap((x) => x.teclado ?? []).flat().find((b) => b.texto.startsWith('Quitar'))!;
+    const r4 = await app.callback(U, quitar.dados);
+    expect(textos(r4)).toContain('Pagamento recebido');
+    expect(textos(r4)).toContain('Valor: <b>R$ 1.300,00</b>');
+    expect(textos(r4)).toContain('parcela 1');
+    expect(textos(r4)).toContain('parcela 2');
+    expect(botao(r4, 'ok:')).toBeDefined();
+  });
+
+  it('digitar o nome e depois o valor também funciona', async () => {
+    const { app } = await montar();
+    await app.comando(U, 'pagar', '');
+    const r1 = await app.mensagem(U, '112.198.194-17'); // pelo documento
+    expect(textos(r1)).toContain('tem 2 contratos');
+    const r2 = await app.callback(U, r1[0]!.teclado![1]![0]!.dados); // contrato 2 (o2)
+    const r3 = await app.mensagem(U, '200');
+    expect(textos(r3)).toContain('Valor: <b>R$ 200,00</b>');
+    expect(r2).toBeDefined();
+  });
+
+  it('frase com cliente de um contrato só vai direto ao resumo; valor acima do contrato é recusado', async () => {
+    const { app } = await montar();
+    const r = await app.mensagem(U, 'ana pagou 300');
+    expect(textos(r)).toContain('Pagamento recebido');
+    expect(textos(r)).toContain('Ana Paula');
+    expect(textos(await app.comando(U, 'pagar', 'Ana 5000'))).toContain('mais que o saldo em aberto deste contrato');
+  });
+
+  it('/pagar Pedro (sem valor) mostra os contratos; ninguém devendo', async () => {
+    const { app, repo } = await montar();
+    expect(textos(await app.comando(U, 'pagar', 'Pedro'))).toContain('tem 2 contratos');
+    repo.parcelas.length = 0;
+    expect(textos(await app.comando(U, 'pagar', ''))).toContain('Ninguém está devendo');
   });
 });

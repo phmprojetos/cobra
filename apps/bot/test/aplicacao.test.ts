@@ -219,12 +219,13 @@ describe.skipIf(!disponivel)('fluxos do bot (Supabase)', () => {
     expect((await app.comando(USER, 'hoje', ''))[0]!.texto).toContain('Resumo');
   });
 
-  it('/pagar guiado: pergunta e interpreta a resposta sem IA', async () => {
+  it('/pagar guiado: quem paga → contrato → valor', async () => {
     const r = await app.comando(USER, 'pagar', '');
-    expect(r[0]!.texto).toContain('Envie');
-    const r2 = await app.mensagem(USER, `${nomeCarlos} 100`);
-    expect(r2[0]!.texto).toContain('Pagamento recebido');
-    await app.callback(USER, botao(r2, 'x:'));
+    expect(r[0]!.texto).toContain('Quem está pagando?');
+    const r2 = await app.mensagem(USER, nomeCarlos);
+    // Um contrato: segue direto para o valor
+    expect(r2.map((x) => x.texto).join()).toMatch(/Quanto foi pago|contratos em aberto/);
+    await app.comando(USER, 'ajuda', ''); // limpa esperas
   });
 
   it('whitelist: ignora silenciosamente quem não está autorizado', async () => {
