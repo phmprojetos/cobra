@@ -14,9 +14,11 @@
     "test:llm": "pnpm --filter @cobra/bot test:llm",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "db:start": "supabase start",
-    "db:reset": "supabase db reset",
-    "db:types": "supabase gen types typescript --local > packages/db/src/database.types.ts"
+    "db:types": "supabase gen types typescript --linked > packages/db/src/database.types.ts",
+    "db:link": "supabase link",
+    "db:push": "supabase db push",
+    "db:seed": "supabase db push --include-seed",
+    "test:db": "RUN_DB_TESTS=1 pnpm -r --if-present test"
   },
   "devDependencies": {
     "@types/node": "^22",

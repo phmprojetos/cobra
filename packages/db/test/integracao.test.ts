@@ -16,23 +16,21 @@ import {
   type Database,
 } from '../src';
 
-// Chaves de demonstração padrão do `supabase start` (somente ambiente local).
-const URL = process.env.SUPABASE_URL ?? 'http://127.0.0.1:54321';
-const ANON =
-  process.env.SUPABASE_ANON_KEY ??
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0';
-const SERVICE =
-  process.env.SUPABASE_SERVICE_ROLE_KEY ??
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU';
+const URL = process.env.SUPABASE_URL ?? '';
+const ANON = process.env.SUPABASE_ANON_KEY ?? '';
+const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
 
-const disponivel = await fetch(`${URL}/rest/v1/`, { headers: { apikey: ANON } })
-  .then((r) => r.status < 500)
-  .catch(() => false);
+/**
+ * Integração contra o projeto Supabase do .env. Grava dados de teste (clientes inativados ao final,
+ * operações e um usuário de Auth "@teste.local"), por isso só roda com RUN_DB_TESTS=1 —
+ * use um projeto de desenvolvimento, nunca o de produção.
+ */
+const disponivel = !!process.env.RUN_DB_TESTS && !!URL && !!SERVICE;
 
 const meta = { origem: 'telegram' as const, mensagemTelegram: 'teste' };
 
 describe.skipIf(!disponivel)('integração com Supabase local', () => {
-  const db = criarClienteServico(URL, SERVICE);
+  const db = disponivel ? criarClienteServico(URL, SERVICE) : (null as never);
   const repo = new Repositorio(db);
   let hoje: string;
   let clienteId: string;

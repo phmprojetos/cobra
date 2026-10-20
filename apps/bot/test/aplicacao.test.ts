@@ -9,11 +9,14 @@ import type { Intencao } from '../src/ia/ferramentas';
 import type { ContextoInterpretacao, Interpretador, ResultadoInterpretacao } from '../src/ia/interpretador';
 import { executarJobNotificacoes } from '../src/notificacoes';
 
-const URL = process.env.SUPABASE_URL ?? 'http://127.0.0.1:54321';
-const SERVICE =
-  process.env.SUPABASE_SERVICE_ROLE_KEY ??
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU';
-const disponivel = await fetch(`${URL}/rest/v1/`).then((r) => r.status < 500).catch(() => false);
+const URL = process.env.SUPABASE_URL ?? '';
+const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
+/**
+ * Integração contra o projeto Supabase do .env. Grava dados de teste (clientes inativados ao final,
+ * operações e um usuário de Auth "@teste.local"), por isso só roda com RUN_DB_TESTS=1 —
+ * use um projeto de desenvolvimento, nunca o de produção.
+ */
+const disponivel = !!process.env.RUN_DB_TESTS && !!URL && !!SERVICE;
 
 /** Interpretador simulado: devolve a intenção registrada para cada texto. */
 class InterpretadorFake implements Interpretador {
@@ -35,7 +38,7 @@ function botao(r: Resposta[], prefixo: string): string {
 }
 
 describe.skipIf(!disponivel)('fluxos do bot (Supabase local)', () => {
-  const db = criarClienteServico(URL, SERVICE);
+  const db = disponivel ? criarClienteServico(URL, SERVICE) : (null as never);
   const repo = new Repositorio(db);
   const ia = new InterpretadorFake();
   const app = new Aplicacao(repo, ia, silencioso);
