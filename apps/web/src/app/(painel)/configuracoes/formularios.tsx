@@ -74,6 +74,7 @@ const ROTULOS: Record<string, string> = {
   atraso: 'Atraso',
   resumo_diario: 'Resumo diário',
   resumo_semanal: 'Resumo semanal',
+  lista_atrasados: 'Lista de atrasados',
 };
 const DIAS = ['', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado', 'domingo'];
 
@@ -92,6 +93,7 @@ export function FormRegra({ regra, clientes }: { regra: RegraForm; clientes: { i
   useAviso(estado);
   const novo = !regra.id;
   const usaOffset = regra.tipo === 'lembrete_antes' || regra.tipo === 'atraso' || novo;
+  const rotulo = regra.tipo === 'atraso' ? `Atraso por parcela (D+${regra.offset_dias})` : ROTULOS[regra.tipo];
   return (
     <form action={acao} className="flex flex-wrap items-end gap-3 p-3 text-sm">
       {regra.id && <input type="hidden" name="id" value={regra.id} />}
@@ -109,7 +111,7 @@ export function FormRegra({ regra, clientes }: { regra: RegraForm; clientes: { i
       ) : (
         <>
           <input type="hidden" name="tipo" value={regra.tipo} />
-          <span className="w-32 font-medium">{ROTULOS[regra.tipo]}</span>
+          <span className="w-44 font-medium">{rotulo}</span>
         </>
       )}
       {usaOffset && (
@@ -134,7 +136,7 @@ export function FormRegra({ regra, clientes }: { regra: RegraForm; clientes: { i
           </select>
         </label>
       )}
-      {!regra.tipo.startsWith('resumo') && clientes.length > 0 && (
+      {!regra.tipo.startsWith('resumo') && regra.tipo !== 'lista_atrasados' && clientes.length > 0 && (
         <label className="space-y-1">
           <span className="text-muted-foreground block text-xs">Silenciar clientes</span>
           <select name="silenciar" multiple defaultValue={regra.silenciar_clientes} className="bg-background h-16 w-44 rounded-md border px-1 text-xs">

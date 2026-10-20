@@ -28,7 +28,16 @@ export default async function Configuracoes() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Notificações no Telegram</CardTitle>
-          <CardDescription>Avaliadas a cada 15 minutos. Cada alerta é enviado uma única vez.</CardDescription>
+          <CardDescription>
+            Avaliadas a cada 15 minutos. Cada alerta é enviado uma única vez.{' '}
+            {config.canalAlertas ? (
+              <>
+                Destino: canal <b>{config.canalAlertas.titulo}</b> (alertas agrupados).
+              </>
+            ) : (
+              <>Destino: seu chat privado. Para usar um canal, adicione o bot como administrador do canal (veja /canal no bot).</>
+            )}
+          </CardDescription>
         </CardHeader>
         <CardContent className="divide-y p-0">
           {regras.map((r) => (

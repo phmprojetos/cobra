@@ -40,7 +40,10 @@ export class Formatador {
 
 export interface Botao {
   texto: string;
+  /** callback_data (botões de ação). */
   dados: string;
+  /** Se presente, o botão é um link (usado no canal de alertas). */
+  url?: string;
 }
 
 export interface Resposta {
@@ -77,4 +80,5 @@ Nada é gravado sem você confirmar ✅.
 /clientes <code>[filtro]</code> — lista com nome e documento
 /cliente <code>nome ou documento</code> — ficha do cliente
 /resumo — visão geral da carteira
+/canal — canal de alertas (status e teste)
 /ajuda — esta mensagem`;

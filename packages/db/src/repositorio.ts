@@ -92,6 +92,12 @@ export class Repositorio {
     return valor;
   }
 
+  /** Define (ou remove, com null) o canal que recebe os alertas automáticos. */
+  async salvarCanalAlertas(canal: { id: number; titulo: string } | null): Promise<void> {
+    semErro(await this.db.from('configuracoes').upsert({ chave: 'canal_alertas', valor: canal ?? false }));
+    this.limparCacheConfig();
+  }
+
   limparCacheConfig(): void {
     this.cacheConfig = null;
   }

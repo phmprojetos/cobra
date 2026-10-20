@@ -22,7 +22,8 @@ export type TipoRegraNotificacao =
   | 'no_dia'
   | 'atraso'
   | 'resumo_diario'
-  | 'resumo_semanal';
+  | 'resumo_semanal'
+  | 'lista_atrasados';
 export type EstrategiaAlocacaoNome = 'proporcional' | 'juros_primeiro';
 
 export interface ParcelaPlano {

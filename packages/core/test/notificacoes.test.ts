@@ -138,6 +138,15 @@ describe('avaliarNotificacoes', () => {
     expect(avaliarNotificacoes(entrada({ regras: r, agora: em('2026-10-20T08:15'), enviadas }))).toEqual([]);
   });
 
+  it('lista diária de atrasados sai uma vez por dia, sem parcela', () => {
+    const r = [regra({ id: 'lista', tipo: 'lista_atrasados', horario: '09:00' })];
+    expect(avaliarNotificacoes(entrada({ regras: r }))).toEqual([
+      expect.objectContaining({ tipo: 'lista_atrasados', parcelaId: null, dataReferencia: '2026-10-20' }),
+    ]);
+    const enviadas = new Set([chaveAlerta('lista', null, '2026-10-20')]);
+    expect(avaliarNotificacoes(entrada({ regras: r, enviadas }))).toEqual([]);
+  });
+
   it('resumo semanal só no dia configurado (segunda por padrão)', () => {
     const r = [regra({ id: 'sem', tipo: 'resumo_semanal', horario: '08:00' })];
     // 2026-10-19 é segunda

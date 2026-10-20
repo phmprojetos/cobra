@@ -8,6 +8,7 @@ import {
   type ParcelaParaAlerta,
 } from '@cobra/core';
 import { atualizarStatus, paraRegra, type CarteiraCompleta, type Repositorio } from '@cobra/db';
+import { mensagemGrupoParcelas, mensagemListaAtrasados, type TipoGrupo } from './canal';
 import { textoResumoDiario, textoResumoSemanal } from './consultas';
 import { escapar, Formatador, type Botao, type Resposta } from './formatacao';
 import type { Log } from './aplicacao';
@@ -70,16 +71,25 @@ export interface ResultadoJob {
   falhas: number;
 }
 
+/** Uma mensagem a enviar e as chaves de idempotência (regra/parcela/data) que ela cobre. */
+interface Envio {
+  resposta: Resposta;
+  chaves: { regraId: string; parcelaId: string | null; data: string }[];
+}
+
 /**
  * Job a cada 15 min: atualiza status (atrasos) e envia os alertas devidos.
- * Idempotência: a linha em `notificacoes_enviadas` é reservada ANTES do envio
- * (unique por regra/parcela/data); se o envio falhar, a reserva é liberada para nova tentativa.
+ * - Com canal de alertas configurado: mensagens agrupadas (uma por regra/dia) no canal.
+ * - Sem canal: um alerta por parcela, com botões de ação, no chat privado de cada usuário.
+ * Idempotência: as linhas em `notificacoes_enviadas` são reservadas ANTES do envio
+ * (unique por regra/parcela/data); se o envio falhar, as reservas são liberadas.
  */
 export async function executarJobNotificacoes(
   repo: Repositorio,
   enviar: Enviar,
   destinatarios: readonly number[],
   log: Log,
+  botUsername = '',
 ): Promise<ResultadoJob> {
   const statusAtualizados = await atualizarStatus(repo);
   const config = await repo.configuracao();
@@ -111,36 +121,65 @@ export async function executarJobNotificacoes(
   });
 
   const f = new Formatador(config);
+  const canal = config.canalAlertas;
+  const envios: Envio[] = [];
+  const chave = (a: Alerta) => ({ regraId: a.regra.id, parcelaId: a.parcelaId, data: a.dataReferencia });
+
+  // Mensagens da carteira (não ligadas a parcela)
+  for (const a of alertas) {
+    if (a.tipo === 'parcela') continue;
+    const resposta =
+      a.tipo === 'resumo_diario'
+        ? { texto: textoResumoDiario(carteira, a.dataReferencia, f) }
+        : a.tipo === 'resumo_semanal'
+          ? { texto: textoResumoSemanal(carteira, a.dataReferencia, f) }
+          : mensagemListaAtrasados(carteira, a.dataReferencia, f, botUsername);
+    // Lista vazia: marca como enviada (não reavalia o dia todo) sem mandar mensagem.
+    envios.push({ resposta: resposta ?? { texto: '' }, chaves: [chave(a)] });
+  }
+
+  const deParcela = alertas.filter((a): a is Extract<Alerta, { tipo: 'parcela' }> => a.tipo === 'parcela');
+  if (canal) {
+    // Agrupa por regra + dia: "vencem amanhã: A, B, C" numa mensagem só.
+    const grupos = new Map<string, Extract<Alerta, { tipo: 'parcela' }>[]>();
+    for (const a of deParcela) {
+      const k = `${a.regra.id}|${a.dataReferencia}`;
+      grupos.set(k, [...(grupos.get(k) ?? []), a]);
+    }
+    for (const lista of grupos.values()) {
+      const tipo = lista[0]!.regra.tipo as TipoGrupo;
+      const msg = mensagemGrupoParcelas(tipo, lista.map((a) => a.parcelaId), carteira, hoje, f, botUsername);
+      envios.push({ resposta: msg ?? { texto: '' }, chaves: lista.map(chave) });
+    }
+  } else {
+    for (const a of deParcela) {
+      const texto = textoAlertaParcela(a, carteira, hoje, f);
+      envios.push({ resposta: texto ? { texto, teclado: botoesAlertaParcela(a.parcelaId) } : { texto: '' }, chaves: [chave(a)] });
+    }
+  }
+
+  const destinos = canal ? [canal.id] : destinatarios;
   let enviados = 0;
   let falhas = 0;
-  for (const alerta of alertas) {
-    const resposta: Resposta | null =
-      alerta.tipo === 'parcela'
-        ? (() => {
-            const texto = textoAlertaParcela(alerta, carteira, hoje, f);
-            return texto ? { texto, teclado: botoesAlertaParcela(alerta.parcelaId) } : null;
-          })()
-        : {
-            texto:
-              alerta.tipo === 'resumo_diario'
-                ? textoResumoDiario(carteira, alerta.dataReferencia, f)
-                : textoResumoSemanal(carteira, alerta.dataReferencia, f),
-          };
-    if (!resposta) continue;
-
-    const reserva = await repo.reservarNotificacao(alerta.regra.id, alerta.parcelaId, alerta.dataReferencia);
-    if (!reserva) continue; // outro processo já enviou
+  for (const envio of envios) {
+    const reservas: string[] = [];
+    for (const k of envio.chaves) {
+      const id = await repo.reservarNotificacao(k.regraId, k.parcelaId, k.data);
+      if (id) reservas.push(id);
+    }
+    if (reservas.length === 0) continue; // outro processo já cuidou
+    if (!envio.resposta.texto) continue; // nada a dizer (ex.: nenhum atrasado): fica só a marca
     try {
       let messageId = 0;
-      for (const chat of destinatarios) messageId = await enviar(chat, resposta);
-      await repo.confirmarNotificacao(reserva, messageId);
+      for (const chat of destinos) messageId = await enviar(chat, envio.resposta);
+      for (const id of reservas) await repo.confirmarNotificacao(id, messageId);
       enviados++;
     } catch (err) {
       falhas++;
-      log.error({ err, alerta: { regra: alerta.regra.id, parcela: alerta.parcelaId } }, 'falha ao enviar alerta');
-      await repo.liberarNotificacao(reserva);
+      log.error({ err, chaves: envio.chaves }, 'falha ao enviar alerta');
+      for (const id of reservas) await repo.liberarNotificacao(id);
     }
   }
-  if (enviados || falhas || statusAtualizados) log.info({ statusAtualizados, enviados, falhas }, 'job de notificações');
+  if (enviados || falhas || statusAtualizados) log.info({ statusAtualizados, enviados, falhas, destino: canal ? 'canal' : 'privado' }, 'job de notificações');
   return { statusAtualizados, enviados, falhas };
 }

@@ -10,7 +10,7 @@ export interface Resultado {
 }
 
 const HORA = /^([01]\d|2[0-3]):[0-5]\d$/;
-const TIPOS = ['lembrete_antes', 'no_dia', 'atraso', 'resumo_diario', 'resumo_semanal'] as const;
+const TIPOS = ['lembrete_antes', 'no_dia', 'atraso', 'resumo_diario', 'resumo_semanal', 'lista_atrasados'] as const;
 
 function valido(fn: () => unknown): boolean {
   try {
@@ -75,7 +75,7 @@ function lerRegra(form: FormData) {
   return {
     tipo,
     horario,
-    offset_dias: tipo === 'no_dia' || tipo.startsWith('resumo') ? 0 : offset,
+    offset_dias: tipo === 'no_dia' || tipo === 'lista_atrasados' || tipo.startsWith('resumo') ? 0 : offset,
     dia_semana: tipo === 'resumo_semanal' ? (dia ?? 1) : null,
     ativo: form.get('ativo') === 'on',
     silenciar_clientes: form.getAll('silenciar').map(String).filter(Boolean),

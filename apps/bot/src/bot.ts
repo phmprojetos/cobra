@@ -11,14 +11,16 @@ export interface OpcoesAudio {
   baixar: (filePath: string) => Promise<Uint8Array>;
 }
 
-export const COMANDOS = ['start', 'ajuda', 'novo', 'pagar', 'hoje', 'semana', 'atrasados', 'clientes', 'cliente', 'resumo'] as const;
+export const COMANDOS = ['start', 'ajuda', 'novo', 'pagar', 'hoje', 'semana', 'atrasados', 'clientes', 'cliente', 'resumo', 'canal'] as const;
 
 /** Opções de envio (HTML + teclado inline, se houver). */
 export function opcoesEnvio(r: Resposta) {
   if (!r.teclado?.length) return { parse_mode: 'HTML' as const };
   return {
     parse_mode: 'HTML' as const,
-    reply_markup: InlineKeyboard.from(r.teclado.map((linha) => linha.map((b) => InlineKeyboard.text(b.texto, b.dados)))),
+    reply_markup: InlineKeyboard.from(
+      r.teclado.map((linha) => linha.map((b) => (b.url ? InlineKeyboard.url(b.texto, b.url) : InlineKeyboard.text(b.texto, b.dados)))),
+    ),
   };
 }
 
@@ -51,6 +53,19 @@ export function criarBot(token: string, app: Aplicacao, permitidos: readonly num
       return;
     }
     await next();
+  });
+
+  // Bot adicionado/removido como admin de um canal ou grupo (por um usuário autorizado):
+  // conecta/desconecta o canal de alertas e avisa no chat privado de quem fez a ação.
+  bot.on('my_chat_member', async (ctx) => {
+    const { chat, new_chat_member: novo } = ctx.myChatMember;
+    if (chat.type === 'private') return;
+    const titulo = chat.title;
+    const ativo = novo.status === 'administrator' || (novo.status === 'member' && chat.type !== 'channel');
+    const respostas = ativo
+      ? await app.conectarCanal(ctx.from.id, { id: chat.id, titulo })
+      : await app.desconectarCanal(chat.id);
+    for (const r of respostas) await ctx.api.sendMessage(ctx.from.id, r.texto, opcoesEnvio(r)).catch((err) => log.error({ err }, 'aviso de canal'));
   });
 
   for (const nome of COMANDOS) {
@@ -126,6 +141,7 @@ export async function registrarComandos(bot: Bot): Promise<void> {
     { command: 'cliente', description: 'Ficha de um cliente (nome ou documento)' },
     { command: 'novo', description: 'Novo empréstimo (sem IA)' },
     { command: 'pagar', description: 'Registrar pagamento (sem IA)' },
+    { command: 'canal', description: 'Canal de alertas (status/teste)' },
     { command: 'ajuda', description: 'Como usar' },
   ]);
 }

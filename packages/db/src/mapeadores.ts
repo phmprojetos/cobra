@@ -75,6 +75,8 @@ export interface Configuracao {
   timezone: string;
   silencio: HorarioSilencio | null;
   estrategiaAlocacao: EstrategiaAlocacaoNome;
+  /** Canal/grupo do Telegram que recebe os alertas automáticos (null = chat privado). */
+  canalAlertas: { id: number; titulo: string } | null;
 }
 
 export const CONFIG_PADRAO: Configuracao = {
@@ -83,6 +85,7 @@ export const CONFIG_PADRAO: Configuracao = {
   timezone: 'America/Sao_Paulo',
   silencio: { inicio: '22:00', fim: '07:00' },
   estrategiaAlocacao: 'proporcional',
+  canalAlertas: null,
 };
 
 /** Tabela `configuracoes` tem precedência; depois env; depois padrão. */
@@ -117,5 +120,12 @@ export function montarConfiguracao(
     timezone: valido(() => new Intl.DateTimeFormat('en', { timeZone: timezone })) ? timezone : CONFIG_PADRAO.timezone,
     silencio: silencio === undefined ? CONFIG_PADRAO.silencio : silencio,
     estrategiaAlocacao: estrategia === 'juros_primeiro' ? 'juros_primeiro' : 'proporcional',
+    canalAlertas: lerCanal(m.get('canal_alertas')),
   };
+}
+
+function lerCanal(v: unknown): Configuracao['canalAlertas'] {
+  if (!v || typeof v !== 'object') return null;
+  const { id, titulo } = v as { id?: unknown; titulo?: unknown };
+  return typeof id === 'number' && Number.isSafeInteger(id) ? { id, titulo: typeof titulo === 'string' ? titulo : '' } : null;
 }

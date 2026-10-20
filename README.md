@@ -137,7 +137,9 @@ O job roda a cada 15 minutos (minutos 00/15/30/45). A cada execução, ele:
 3. Respeita o horário de silêncio (o alerta é **adiado** até o fim do silêncio, não descartado) e os clientes silenciados.
 4. Reserva cada envio em `notificacoes_enviadas` antes de mandar. A chave única é regra + parcela + data, então o mesmo alerta nunca sai duas vezes. Se o envio falhar, a reserva é liberada para a próxima execução.
 
-Cada alerta de parcela traz botões: 💰 Recebido total · 🪙 Recebido parcial · 📅 +1/+3/+7 dias ou outra data. Todos passam pela confirmação ✅.
+**Canal de alertas (recomendado):** crie um canal privado no Telegram e adicione o bot como administrador. O bot detecta e passa a publicar lá: 🆕 novos empréstimos, ⚠️ vencimentos próximos, 📅 vencimentos do dia e 🔴 a lista diária de atrasados, agrupados em uma mensagem por tipo. Cada contrato traz um link que abre o bot no chat privado já com as ações. Remover o bot do canal devolve os alertas ao chat privado. `/canal` mostra o status e manda um teste.
+
+No chat privado (sem canal), cada alerta de parcela traz botões: 💰 Recebido total · 🪙 Recebido parcial · 📅 +1/+3/+7 dias ou outra data. Todos passam pela confirmação ✅.
 
 ## Regras de negócio (resumo)
 

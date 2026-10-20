@@ -25,7 +25,8 @@ const repo = new Repositorio(criarClienteServico(config.SUPABASE_URL, config.SUP
   TIMEZONE: config.TIMEZONE,
 });
 const ia = new InterpretadorClaude(new Anthropic({ apiKey: config.ANTHROPIC_API_KEY || null }), config.ANTHROPIC_MODEL);
-const app = new Aplicacao(repo, ia, log);
+const enviarParaChat: Enviar = (chatId, r) => enviar(chatId, r);
+const app = new Aplicacao(repo, ia, log, enviarParaChat);
 const bot = criarBot(config.TELEGRAM_BOT_TOKEN, app, config.TELEGRAM_ALLOWED_USER_IDS, log, {
   transcritor: config.GROQ_API_KEY ? new TranscritorGroq(config.GROQ_API_KEY, config.GROQ_MODELO_AUDIO) : null,
   maxSegundos: config.AUDIO_MAX_SEGUNDOS,
@@ -47,7 +48,7 @@ async function rodarJob() {
   if (jobRodando) return { ignorado: true };
   jobRodando = true;
   try {
-    return await executarJobNotificacoes(repo, enviar, config.TELEGRAM_ALLOWED_USER_IDS, log);
+    return await executarJobNotificacoes(repo, enviar, config.TELEGRAM_ALLOWED_USER_IDS, log, bot.botInfo.username);
   } catch (err) {
     log.error({ err }, 'job de notificações falhou');
     throw err;
@@ -120,6 +121,8 @@ servidor.on('error', (err: NodeJS.ErrnoException) => {
   process.exit(1);
 });
 servidor.listen(config.PORT, () => log.info({ porta: config.PORT, modo: config.BOT_MODO }, 'servidor no ar'));
+// Carrega o username do bot (usado nos links dos alertas do canal) antes do primeiro job.
+await bot.init();
 await registrarComandos(bot).catch((err) => log.error({ err }, 'setMyCommands falhou'));
 
 if (config.BOT_MODO === 'polling') {

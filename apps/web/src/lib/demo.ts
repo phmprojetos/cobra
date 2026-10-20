@@ -110,6 +110,7 @@ const REGRAS: Omit<RegraRow, 'id' | 'created_at' | 'updated_at'>[] = [
   { tipo: 'atraso', offset_dias: 7, horario: '10:00:00', dia_semana: null, ativo: true, silenciar_clientes: [] },
   { tipo: 'resumo_diario', offset_dias: 0, horario: '08:00:00', dia_semana: null, ativo: true, silenciar_clientes: [] },
   { tipo: 'resumo_semanal', offset_dias: 0, horario: '08:00:00', dia_semana: 1, ativo: true, silenciar_clientes: [] },
+  { tipo: 'lista_atrasados', offset_dias: 0, horario: '09:00:00', dia_semana: null, ativo: true, silenciar_clientes: [] },
 ];
 
 interface Estado {

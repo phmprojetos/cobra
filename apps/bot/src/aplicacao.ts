@@ -1,5 +1,6 @@
 import {
   AJUDA_DOCUMENTO,
+  diferencaDias,
   ErroRegra,
   formatarDocumento,
   parseDocumento,
@@ -33,6 +34,8 @@ import {
   type Repositorio,
 } from '@cobra/db';
 import { intencaoRapida, parseNovo, parsePagar } from './atalhos';
+import { mensagemNovoEmprestimo } from './canal';
+import { botoesAlertaParcela, type Enviar } from './notificacoes';
 import {
   textoAReceber,
   textoAtrasados,
@@ -130,7 +133,69 @@ export class Aplicacao {
     private readonly repo: Repositorio,
     private readonly ia: Interpretador,
     private readonly log: Log = console,
+    /** Envio para o canal de alertas (novo empréstimo, teste do canal). */
+    private readonly enviar: Enviar | null = null,
   ) {}
+
+  // ─────────────────────────── canal de alertas ───────────────────────────
+
+  /** Bot adicionado como admin de um canal/grupo: passa a ser o destino dos alertas. */
+  async conectarCanal(userId: number, chat: { id: number; titulo: string }): Promise<Resposta[]> {
+    return this.protegido(async () => {
+      await this.repo.salvarCanalAlertas(chat);
+      this.log.info({ canal: chat.id, por: userId }, 'canal de alertas conectado');
+      await this.enviar?.(chat.id, {
+        texto: '🔔 <b>Canal de alertas conectado.</b>\nAqui chegam: novos empréstimos, vencimentos próximos, vencimentos do dia e a lista diária de atrasados.',
+      });
+      return [
+        {
+          texto: `✅ Canal <b>${escapar(chat.titulo)}</b> conectado. Os alertas automáticos passam a ir para lá; aqui no privado ficam os lançamentos e as ações.\nPara voltar os alertas para cá, remova o bot do canal.`,
+        },
+      ];
+    });
+  }
+
+  /** Bot removido do canal: alertas voltam para o chat privado. */
+  async desconectarCanal(chatId: number): Promise<Resposta[]> {
+    return this.protegido(async () => {
+      const atual = (await this.repo.configuracao()).canalAlertas;
+      if (atual?.id !== chatId) return [];
+      await this.repo.salvarCanalAlertas(null);
+      return [{ texto: `🔕 Bot removido do canal <b>${escapar(atual.titulo)}</b>. Os alertas voltam a chegar aqui no privado.` }];
+    });
+  }
+
+  private async avisarCanal(r: Resposta): Promise<void> {
+    const canal = (await this.repo.configuracao()).canalAlertas;
+    if (!canal || !this.enviar) return;
+    try {
+      await this.enviar(canal.id, r);
+    } catch (err) {
+      // O lançamento já foi gravado: falha no aviso não pode desfazê-lo.
+      this.log.error({ err, canal: canal.id }, 'falha ao avisar o canal');
+    }
+  }
+
+  /** Ficha de uma parcela com ações (aberta pelo link dos alertas do canal). */
+  private async fichaParcela(parcelaId: string): Promise<Resposta[]> {
+    const { data: p } = await this.repo.db.from('parcelas').select('*').eq('id', parcelaId).maybeSingle();
+    if (!p) return [{ texto: 'Parcela não encontrada.' }];
+    const c = await this.repo.carregarCarteira({ operacaoId: p.operacao_id });
+    const op = c.operacoes[0]!;
+    const cliente = c.clientes.get(op.cliente_id);
+    const f = await this.fmt();
+    const hoje = await this.repo.hoje();
+    const saldo = saldoParcela(paraParcela(p)).total;
+    const total = c.parcelas.length;
+    const linhas = [
+      `👤 <b>${escapar(cliente?.nome ?? '?')}</b> · ${formatarDocumento(cliente?.documento_tipo ?? null, cliente?.documento ?? null)}`,
+      `${total > 1 ? `Parcela ${p.numero}/${total} · ` : ''}vencimento ${f.data(p.vencimento, hoje.slice(0, 4))}`,
+      `Em aberto: <b>${f.dinheiro(saldo)}</b>${p.valor_pago > 0 ? ` (já pago ${f.dinheiro(p.valor_pago)})` : ''}`,
+      p.vencimento < hoje ? `🔴 ${diferencaDias(p.vencimento, hoje)} dia(s) de atraso` : p.vencimento === hoje ? '🟠 Vence hoje' : '',
+    ].filter(Boolean);
+    if (saldo === 0) return [{ texto: `${linhas.join('\n')}\n\n✅ Parcela quitada.` }];
+    return [{ texto: linhas.join('\n'), teclado: botoesAlertaParcela(parcelaId) }];
+  }
 
   private async fmt(): Promise<Formatador> {
     return new Formatador(await this.repo.configuracao());
@@ -168,8 +233,24 @@ export class Aplicacao {
       const f = await this.fmt();
       switch (nome) {
         case 'start':
+          // Link do canal de alertas: /start p_<parcela>
+          if (args.startsWith('p_')) return this.fichaParcela(args.slice(2));
+          return [{ texto: TEXTO_AJUDA }];
         case 'ajuda':
           return [{ texto: TEXTO_AJUDA }];
+        case 'canal': {
+          const canal = (await this.repo.configuracao()).canalAlertas;
+          if (!canal) {
+            return [
+              {
+                texto:
+                  '🔕 Nenhum canal de alertas conectado: os alertas chegam aqui.\n\n<b>Para conectar:</b>\n1. Crie um canal privado no Telegram.\n2. Em <i>Administradores</i>, adicione este bot (com permissão de publicar).\n3. Pronto: eu detecto e confirmo aqui.',
+              },
+            ];
+          }
+          await this.avisarCanal({ texto: '🔔 Teste do canal de alertas: tudo certo.' });
+          return [{ texto: `🔔 Alertas indo para <b>${escapar(canal.titulo)}</b>. Mandei uma mensagem de teste lá.` }];
+        }
         case 'novo':
         case 'pagar': {
           if (!args.trim()) {
@@ -624,6 +705,10 @@ export class Aplicacao {
     switch (p.acao) {
       case 'operacao':
         await executarOperacao(this.repo, p.plano, meta);
+        {
+          const cli = await this.repo.cliente(p.plano.entrada.clienteId);
+          await this.avisarCanal(mensagemNovoEmprestimo(p.plano, formatarDocumento(cli?.documento_tipo ?? null, cli?.documento ?? null), await this.repo.hoje(), f));
+        }
         return [{ texto: `${resumo}\n\n✅ <b>Registrado</b>`, editarOriginal: true }];
       case 'pagamento': {
         await executarPagamento(this.repo, p.plano, meta);
