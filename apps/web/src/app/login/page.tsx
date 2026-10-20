@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { FormularioLogin } from './formulario';
 
@@ -6,7 +7,8 @@ export default async function Login({ searchParams }: PageProps<'/login'>) {
   return (
     <main className="flex min-h-dvh items-center justify-center p-4">
       <Card className="w-full max-w-sm">
-        <CardHeader>
+        <CardHeader className="items-center text-center">
+          <Image src="/cobra.png" alt="Cobra" width={72} height={72} priority className="mx-auto mb-2 size-18 rounded-2xl shadow-md" />
           <CardTitle>Cobra</CardTitle>
           <CardDescription>Entre com o link mágico enviado ao seu e-mail.</CardDescription>
         </CardHeader>

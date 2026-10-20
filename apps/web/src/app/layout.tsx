@@ -10,6 +10,8 @@ const geistMono = Geist_Mono({ variable: '--font-geist-mono', subsets: ['latin']
 export const metadata: Metadata = {
   title: 'Cobra',
   description: 'Gestão pessoal de empréstimos',
+  // Ícones: src/app/icon.png (favicon) e apple-icon.png; manifesto em app/manifest.ts.
+  appleWebApp: { title: 'Cobra', capable: true, statusBarStyle: 'default' },
 };
 
 // viewportFit cover: permite usar env(safe-area-inset-bottom) na barra do rodapé.

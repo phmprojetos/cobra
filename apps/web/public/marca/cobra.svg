@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Logo Cobra: cobra enrolada formando um "C" em volta de uma moeda (cobrança). -->
+  <defs>
+    <linearGradient id="fundo" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0ea5e9"/>
+      <stop offset="1" stop-color="#4f46e5"/>
+    </linearGradient>
+    <linearGradient id="moeda" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fde68a"/>
+      <stop offset="1" stop-color="#f59e0b"/>
+    </linearGradient>
+    <filter id="sombra" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="9" flood-color="#1e1b4b" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <rect width="512" height="512" rx="116" fill="url(#fundo)"/>
+  <circle cx="420" cy="80" r="170" fill="#ffffff" opacity="0.06"/>
+
+  <!-- Moeda -->
+  <g filter="url(#sombra)">
+    <circle cx="256" cy="256" r="58" fill="url(#moeda)"/>
+    <circle cx="256" cy="256" r="44" fill="none" stroke="#b45309" stroke-opacity="0.45" stroke-width="5"/>
+    <path d="M 268 232 Q 256 224 244 230 Q 234 238 244 250 Q 268 258 268 270 Q 264 284 244 280 M 256 220 L 256 292" fill="none" stroke="#92400e" stroke-opacity="0.8" stroke-width="8" stroke-linecap="round"/>
+  </g>
+
+  <g filter="url(#sombra)">
+    <!-- Corpo -->
+    <path d="M 369.3 173.7 A 140 140 0 1 0 321.7 379.6" fill="none" stroke="#ffffff" stroke-width="62" stroke-linecap="round"/>
+    <!-- Cauda afinando (contorno contínuo) -->
+    <path d="M 336.5 407.4 L 341.2 403.6 L 345.7 399.6 L 350.0 395.4 L 354.2 391.1 L 358.1 386.7 L 361.9 382.2 L 365.5 377.6 L 368.9 372.9 L 372.0 368.0 L 375.0 363.1 L 377.7 358.1 L 380.3 353.1 L 382.6 348.0 L 384.7 342.8 L 386.6 337.6 L 388.2 332.3 L 389.7 327.1 L 390.9 321.8 L 391.8 316.5 L 392.5 311.2 L 393.0 305.9 L 393.2 300.6 L 393.1 295.3 L 392.3 290.0 L 391.4 289.7 L 388.1 293.9 L 385.1 297.9 L 382.1 301.9 L 379.1 305.7 L 376.0 309.4 L 372.8 313.0 L 369.6 316.4 L 366.3 319.7 L 362.9 322.8 L 359.4 325.8 L 355.9 328.6 L 352.4 331.3 L 348.8 333.8 L 345.1 336.2 L 341.4 338.5 L 337.6 340.5 L 333.9 342.5 L 330.1 344.3 L 326.2 345.9 L 322.4 347.4 L 318.5 348.7 L 314.7 349.9 L 310.8 350.9 L 306.9 351.8 Z" fill="#ffffff" stroke="#ffffff" stroke-width="2" stroke-linejoin="round"/>
+    <!-- Pintas -->
+    <g fill="#818cf8" opacity="0.55">
+      <ellipse cx="280.3" cy="118.1" rx="11" ry="7" transform="rotate(10 280.3 118.1)"/>
+      <ellipse cx="181.8" cy="137.3" rx="11" ry="7" transform="rotate(-32 181.8 137.3)"/>
+      <ellipse cx="120.8" cy="219.8" rx="11" ry="7" transform="rotate(-75 120.8 219.8)"/>
+      <ellipse cx="134.8" cy="326.0" rx="11" ry="7" transform="rotate(240 134.8 326.0)"/>
+      <ellipse cx="203.6" cy="385.8" rx="11" ry="7" transform="rotate(202 203.6 385.8)"/>
+      <ellipse cx="289.9" cy="391.8" rx="11" ry="7" transform="rotate(166 289.9 391.8)"/>
+    </g>
+    <!-- Cabeça olhando para dentro do "C" -->
+    <g transform="translate(369.3 173.7) rotate(40)">
+      <path d="M -36 -34 C 12 -48 60 -26 68 0 C 60 26 12 48 -36 34 C -54 22 -54 -22 -36 -34 Z" fill="#ffffff"/>
+      <circle cx="24" cy="-16" r="9" fill="#1e1b4b"/>
+      <circle cx="27" cy="-19" r="3" fill="#ffffff"/>
+      <circle cx="24" cy="16" r="9" fill="#1e1b4b"/>
+      <circle cx="27" cy="13" r="3" fill="#ffffff"/>
+      <path d="M 68 0 L 94 0 M 94 0 L 106 -9 M 94 0 L 106 9" stroke="#fbbf24" stroke-width="6" stroke-linecap="round" fill="none"/>
+    </g>
+  </g>
+</svg>
