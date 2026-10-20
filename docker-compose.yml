@@ -1,7 +1,12 @@
-# Produção (VPS): painel + bot (webhook) + Caddy com HTTPS automático, tudo num domínio só:
-#   https://DOMINIO/          → painel
-#   https://DOMINIO/telegram  → webhook do bot
-# Uso: preencha o .env (veja "Deploy" no README) e rode `docker compose up -d --build`.
+# Produção (VPS): painel + bot (webhook) num domínio só:
+#   https://DOMINIO/          → painel  (127.0.0.1:WEB_PORTA)
+#   https://DOMINIO/telegram  → webhook do bot (127.0.0.1:BOT_PORTA)
+# O HTTPS fica com o proxy da VPS:
+#   • VPS com nginx (já usado por outros sites): deploy/nginx/cobra.conf + certbot
+#       docker compose up -d --build
+#   • VPS vazia: Caddy incluso, com HTTPS automático nas portas 80/443
+#       docker compose --profile caddy up -d --build
+# Preencha o .env antes (veja "Deploy" no README).
 services:
   web:
     build:
@@ -15,6 +20,8 @@ services:
     environment:
       NEXT_PUBLIC_SITE_URL: https://${DOMINIO}
       PORT: 3000
+    ports:
+      - '127.0.0.1:${WEB_PORTA:-3100}:3000'
     restart: unless-stopped
 
   bot:
@@ -27,9 +34,12 @@ services:
       PORT: 8080
       # Registrado no Telegram automaticamente quando o bot sobe.
       TELEGRAM_WEBHOOK_URL: https://${DOMINIO}/telegram
+    ports:
+      - '127.0.0.1:${BOT_PORTA:-8090}:8080'
     restart: unless-stopped
 
   caddy:
+    profiles: ['caddy']
     image: caddy:2.10-alpine
     ports:
       - '80:80'
