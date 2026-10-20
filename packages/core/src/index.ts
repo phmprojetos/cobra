@@ -10,3 +10,4 @@ export * from './status';
 export * from './renegociacao';
 export * from './notificacoes';
 export * from './relatorios';
+export * from './textos';

@@ -97,10 +97,22 @@ export function montarConfiguracao(
   };
   const silencio = m.get('horario_silencio') as HorarioSilencio | null | undefined;
   const estrategia = m.get('estrategia_alocacao');
+  // Valores inválidos (moeda/locale/timezone) nunca derrubam o sistema: caem no padrão.
+  const valido = (fn: () => unknown) => {
+    try {
+      fn();
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  const moeda = str('moeda', env.MOEDA, CONFIG_PADRAO.moeda);
+  const locale = str('locale', env.LOCALE, CONFIG_PADRAO.locale);
+  const timezone = str('timezone', env.TIMEZONE, CONFIG_PADRAO.timezone);
   return {
-    moeda: str('moeda', env.MOEDA, CONFIG_PADRAO.moeda),
-    locale: str('locale', env.LOCALE, CONFIG_PADRAO.locale),
-    timezone: str('timezone', env.TIMEZONE, CONFIG_PADRAO.timezone),
+    moeda: valido(() => new Intl.NumberFormat(locale, { style: 'currency', currency: moeda })) ? moeda : CONFIG_PADRAO.moeda,
+    locale: valido(() => new Intl.NumberFormat(locale)) ? locale : CONFIG_PADRAO.locale,
+    timezone: valido(() => new Intl.DateTimeFormat('en', { timeZone: timezone })) ? timezone : CONFIG_PADRAO.timezone,
     silencio: silencio === undefined ? CONFIG_PADRAO.silencio : silencio,
     estrategiaAlocacao: estrategia === 'juros_primeiro' ? 'juros_primeiro' : 'proporcional',
   };

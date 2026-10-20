@@ -185,7 +185,7 @@ describe.skipIf(!disponivel)('integração com Supabase local', () => {
       const ins = await user.from('operacoes').insert({} as never);
       expect(ins.error).not.toBeNull();
 
-      const upd = await user.from('configuracoes').update({ valor: '"BRL"' }).eq('chave', 'moeda').select();
+      const upd = await user.from('configuracoes').update({ valor: 'BRL' }).eq('chave', 'moeda').select();
       expect(upd.data).toHaveLength(1);
       const audit = await user.from('eventos').select('*').eq('entidade', 'configuracoes').order('created_at', { ascending: false }).limit(1);
       expect(audit.data![0]!.payload).toMatchObject({ chave: 'moeda' });
