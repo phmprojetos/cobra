@@ -58,7 +58,7 @@ export default async function Clientes({ searchParams }: PageProps<'/clientes'>)
                   <th className="hidden px-3 py-3 font-medium md:table-cell">Documento</th>
                   <th className="hidden px-3 py-3 text-right font-medium lg:table-cell">Emprestado</th>
                   <th className="hidden px-3 py-3 text-right font-medium lg:table-cell">Recebido</th>
-                  <th className="px-3 py-3 text-center font-medium">Pontualidade</th>
+                  <th className="hidden px-3 py-3 text-center font-medium sm:table-cell">Pontualidade</th>
                   <th className="px-5 py-3 text-right font-medium">Saldo</th>
                 </tr>
               </thead>
@@ -80,7 +80,7 @@ export default async function Clientes({ searchParams }: PageProps<'/clientes'>)
                     <td className="text-muted-foreground hidden px-3 py-3 font-mono text-xs md:table-cell">{formatarDocumento(cl.documento_tipo, cl.documento)}</td>
                     <td className="hidden px-3 py-3 text-right tabular-nums lg:table-cell">{fmt.dinheiro(m.totalEmprestado)}</td>
                     <td className="text-pago hidden px-3 py-3 text-right tabular-nums lg:table-cell">{fmt.dinheiro(m.totalRecebido)}</td>
-                    <td className="px-3 py-3 text-center">
+                    <td className="hidden px-3 py-3 text-center sm:table-cell">
                       <span className={cn('inline-block rounded-full px-2 py-0.5 text-xs font-medium tabular-nums', PILL[tomPontualidade(m.percentualPagoEmDia)])}>
                         {m.percentualPagoEmDia === null ? '—' : fmt.pct(m.percentualPagoEmDia)}
                       </span>

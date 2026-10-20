@@ -1,7 +1,7 @@
 import { LogOut } from 'lucide-react';
 import { Suspense } from 'react';
 import { Marca } from '@/components/marca';
-import { NavLateral, NavTopo } from '@/components/navegacao';
+import { NavLateral, NavRodape } from '@/components/navegacao';
 import { AlternarTema } from '@/components/tema';
 import { Button } from '@/components/ui/button';
 import { MODO_DEMO } from '@/lib/demo';
@@ -42,7 +42,7 @@ export default function LayoutPainel({ children }: LayoutProps<'/'>) {
 
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Topo (celular) */}
-        <header className="bg-background/90 supports-[backdrop-filter]:bg-background/75 sticky top-0 z-20 space-y-3 border-b px-4 pt-3 pb-2 backdrop-blur lg:hidden">
+        <header className="bg-background/90 supports-[backdrop-filter]:bg-background/75 sticky top-0 z-20 border-b px-4 py-3 backdrop-blur lg:hidden">
           <div className="flex items-center justify-between">
             <Marca />
             <div className="flex items-center">
@@ -56,13 +56,14 @@ export default function LayoutPainel({ children }: LayoutProps<'/'>) {
               )}
             </div>
           </div>
-          <Suspense>
-            <NavTopo />
-          </Suspense>
         </header>
         {aviso && <p className="text-muted-foreground bg-muted px-4 py-1.5 text-center text-xs lg:hidden">{aviso}</p>}
-        <main className="mx-auto w-full max-w-7xl flex-1 space-y-6 px-4 py-6 lg:px-8 lg:py-8">{children}</main>
+        {/* pb extra no celular para o conteúdo não ficar atrás da barra do rodapé */}
+        <main className="mx-auto w-full max-w-7xl flex-1 space-y-6 px-4 pt-6 pb-[calc(6rem+env(safe-area-inset-bottom))] lg:px-8 lg:py-8">{children}</main>
       </div>
+      <Suspense>
+        <NavRodape />
+      </Suspense>
     </div>
   );
 }

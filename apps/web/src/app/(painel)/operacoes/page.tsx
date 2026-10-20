@@ -127,7 +127,7 @@ export default async function Operacoes({ searchParams }: PageProps<'/operacoes'
                   <th className="hidden w-40 px-3 py-3 font-medium sm:table-cell">Quitação</th>
                   <th className="px-3 py-3 font-medium">Próx. venc.</th>
                   <th className="px-3 py-3 text-right font-medium">Em aberto</th>
-                  <th className="px-5 py-3 text-right font-medium">Status</th>
+                  <th className="hidden px-5 py-3 text-right font-medium sm:table-cell">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -151,6 +151,8 @@ export default async function Operacoes({ searchParams }: PageProps<'/operacoes'
                               {fmt.data(o.data_emprestimo)}
                               {nParc > 1 ? ` · ${nParc}x` : ''}
                             </span>
+                            {/* No celular o status vai abaixo do nome (a coluna some) */}
+                            <StatusBadge status={o.status === 'ativa' && breve ? 'breve' : o.status} className="mt-1 sm:hidden" />
                           </span>
                         </Link>
                       </td>
@@ -170,7 +172,7 @@ export default async function Operacoes({ searchParams }: PageProps<'/operacoes'
                         {abertas > 1 && <span className="text-muted-foreground block text-xs">{abertas} em aberto</span>}
                       </td>
                       <td className={`px-3 py-3 text-right font-semibold tabular-nums ${saldo === 0 ? 'text-pago' : atrasada ? 'text-atraso' : ''}`}>{fmt.dinheiro(saldo)}</td>
-                      <td className="px-5 py-3 text-right">
+                      <td className="hidden px-5 py-3 text-right sm:table-cell">
                         <StatusBadge status={o.status === 'ativa' && breve ? 'breve' : o.status} />
                       </td>
                     </tr>

@@ -12,7 +12,8 @@ export const metadata: Metadata = {
   description: 'Gestão pessoal de empréstimos',
 };
 
-export const viewport: Viewport = { width: 'device-width', initialScale: 1 };
+// viewportFit cover: permite usar env(safe-area-inset-bottom) na barra do rodapé.
+export const viewport: Viewport = { width: 'device-width', initialScale: 1, viewportFit: 'cover' };
 
 export default function RootLayout({ children }: LayoutProps<'/'>) {
   return (

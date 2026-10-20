@@ -54,28 +54,62 @@ export function NavLateral() {
   );
 }
 
-/** Abas horizontais (celular). */
-export function NavTopo() {
+/**
+ * Navegação no rodapé (celular): 5 itens, com "Início" em destaque no centro.
+ * Fixa na base, respeitando a área segura (barra de gestos do iPhone/Android).
+ */
+export function NavRodape() {
   const pathname = usePathname();
   const sufixo = useSufixo();
+  const itens = [
+    { href: '/operacoes', rotulo: 'Operações', icone: FileText },
+    { href: '/clientes', rotulo: 'Clientes', icone: Users },
+    { href: '/', rotulo: 'Início', icone: LayoutDashboard, centro: true },
+    { href: '/fluxo', rotulo: 'Fluxo', icone: BarChart3 },
+    { href: '/configuracoes', rotulo: 'Ajustes', icone: Settings },
+  ];
   return (
-    <nav className="-mx-4 flex gap-1 overflow-x-auto px-4 pb-1 text-sm">
-      {ITENS.map((i) => {
-        const on = ativo(pathname, i.href);
-        return (
-          <Link
-            key={i.href}
-            href={`${i.href}${sufixo}`}
-            className={cn(
-              'flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 font-medium whitespace-nowrap transition-colors',
-              on ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-            )}
-          >
-            <i.icone className="size-3.5" aria-hidden />
-            {i.rotulo}
-          </Link>
-        );
-      })}
+    <nav
+      aria-label="Navegação principal"
+      className="bg-card/95 supports-[backdrop-filter]:bg-card/85 fixed inset-x-0 bottom-0 z-30 border-t pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_16px_rgb(0_0_0/0.06)] backdrop-blur lg:hidden"
+    >
+      <ul className="mx-auto grid h-16 max-w-md grid-cols-5">
+        {itens.map((i) => {
+          const on = ativo(pathname, i.href);
+          if (i.centro) {
+            return (
+              <li key={i.href} className="flex justify-center">
+                <Link href={`${i.href}${sufixo}`} aria-current={on ? 'page' : undefined} className="-mt-6 flex flex-col items-center gap-1">
+                  <span
+                    className={cn(
+                      'ring-background flex size-14 items-center justify-center rounded-full bg-gradient-to-br from-sky-500 to-indigo-600 text-white shadow-lg ring-4 transition-transform active:scale-95',
+                      on && 'shadow-indigo-500/40',
+                    )}
+                  >
+                    <i.icone className="size-6" aria-hidden />
+                  </span>
+                  <span className={cn('text-[11px] font-semibold', on ? 'text-indigo-600 dark:text-sky-400' : 'text-muted-foreground')}>{i.rotulo}</span>
+                </Link>
+              </li>
+            );
+          }
+          return (
+            <li key={i.href}>
+              <Link
+                href={`${i.href}${sufixo}`}
+                aria-current={on ? 'page' : undefined}
+                className={cn(
+                  'flex h-full flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors',
+                  on ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                <i.icone className={cn('size-5', on && 'text-indigo-600 dark:text-sky-400')} aria-hidden />
+                {i.rotulo}
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
     </nav>
   );
 }
