@@ -12,6 +12,7 @@ import {
   type Periodo,
 } from '@cobra/core';
 import { Repositorio, type CarteiraCompleta, type Configuracao, type OperacaoRow } from '@cobra/db';
+import { fonteDemo, MODO_DEMO } from './demo';
 import { supabaseServidor } from './supabase/server';
 
 export type SearchParams = Record<string, string | string[] | undefined>;
@@ -74,13 +75,19 @@ export class Fmt {
   };
 }
 
+/** O que as páginas leem: Supabase (RLS do usuário) ou, com DEMO=1, a carteira fictícia em memória. */
+export type Fonte = Pick<Repositorio, 'configuracao' | 'hoje' | 'regras' | 'eventos' | 'carregarCarteira'>;
+
+export async function fonte(): Promise<Fonte> {
+  return MODO_DEMO ? fonteDemo : new Repositorio(await supabaseServidor());
+}
+
 export async function carregarPainel(sp: SearchParams = {}) {
-  const db = await supabaseServidor();
-  const repo = new Repositorio(db);
+  const repo = await fonte();
   const [config, carteira] = await Promise.all([repo.configuracao(), repo.carregarCarteira()]);
   const hoje = await repo.hoje();
   const { periodo, preset } = lerPeriodo(sp, hoje);
-  return { db, repo, config, carteira, hoje, periodo, preset, fmt: new Fmt(config) };
+  return { repo, config, carteira, hoje, periodo, preset, fmt: new Fmt(config) };
 }
 
 // ─────────────────────────── drill-down dos números ───────────────────────────

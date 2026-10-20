@@ -18,7 +18,8 @@
     "db:link": "supabase link",
     "db:push": "supabase db push",
     "db:seed": "supabase db push --include-seed",
-    "test:db": "RUN_DB_TESTS=1 pnpm -r --if-present test"
+    "test:db": "RUN_DB_TESTS=1 pnpm -r --if-present test",
+    "demo": "DEMO=1 pnpm --filter @cobra/web exec next dev --port 3100"
   },
   "devDependencies": {
     "@types/node": "^22",

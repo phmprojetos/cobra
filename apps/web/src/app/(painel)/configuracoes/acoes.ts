@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { fonteDemo, MODO_DEMO } from '@/lib/demo';
 import { supabaseServidor } from '@/lib/supabase/server';
 
 export interface Resultado {
@@ -38,6 +39,17 @@ export async function salvarGeral(_: Resultado | null, form: FormData): Promise<
   if (silencioAtivo && (!HORA.test(inicio) || !HORA.test(fim))) {
     return { ok: false, mensagem: 'Horário de silêncio inválido.' };
   }
+  if (MODO_DEMO) {
+    fonteDemo.salvarConfig({
+      moeda,
+      locale,
+      timezone,
+      estrategiaAlocacao: estrategia === 'juros_primeiro' ? 'juros_primeiro' : 'proporcional',
+      silencio: silencioAtivo ? { inicio, fim } : null,
+    });
+    revalidatePath('/', 'layout');
+    return { ok: true, mensagem: 'Configurações salvas (modo demonstração).' };
+  }
   const db = await supabaseServidor();
   const { error } = await db.from('configuracoes').upsert([
     { chave: 'moeda', valor: moeda },
@@ -74,6 +86,11 @@ export async function salvarRegra(_: Resultado | null, form: FormData): Promise<
   try {
     const id = String(form.get('id') ?? '');
     const dados = lerRegra(form);
+    if (MODO_DEMO) {
+      fonteDemo.salvarRegra(id || null, { ...dados, horario: `${dados.horario}:00` });
+      revalidatePath('/configuracoes');
+      return { ok: true, mensagem: 'Regra salva (modo demonstração).' };
+    }
     const db = await supabaseServidor();
     const { error } = id
       ? await db.from('regras_notificacao').update(dados).eq('id', id)

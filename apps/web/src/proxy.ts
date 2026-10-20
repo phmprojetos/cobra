@@ -5,6 +5,8 @@ const PUBLICAS = ['/login', '/auth/callback'];
 
 /** Renova a sessão do Supabase e redireciona quem não está logado. */
 export async function proxy(request: NextRequest) {
+  // Modo demonstração: sem login.
+  if (process.env.DEMO === '1') return NextResponse.next({ request });
   let response = NextResponse.next({ request });
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
