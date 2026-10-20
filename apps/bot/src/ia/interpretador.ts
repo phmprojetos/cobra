@@ -32,6 +32,8 @@ Extração:
 - "cadastrar", "cadastro", "novo cliente" = criar_cliente.
 - "pagou", "acertou", "mandou" = registrar_pagamento. "joga o vencimento", "adia", "prorroga" = prorrogar; "com mais 100" = acrescimo 100.
 - Perguntas ("quanto entra", "quem tá atrasado", "saldo da Ana") = consultar.
+  "liste os clientes", "meus clientes", "clientes com Silva", "qual o CPF do Carlos?" = consultar listar_clientes (filtro em "cliente").
+  resumo é só para visão geral da carteira ("como tá a carteira", "resumo").
   "essa semana" = semana atual informada no contexto; "hoje" = início e fim hoje; "esse mês" = do dia 1 ao último dia do mês.
 
 RASCUNHO: quando o contexto trouxer um rascunho, a conversa está no meio de um lançamento. Se a mensagem responde ou corrige

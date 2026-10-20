@@ -37,6 +37,7 @@ import {
   textoAReceber,
   textoAtrasados,
   textoCliente,
+  textoClientes,
   textoResumoCarteira,
   textoResumoDiario,
 } from './consultas';
@@ -198,8 +199,10 @@ export class Aplicacao {
           return [{ texto: textoAtrasados(await this.repo.carregarCarteira(), hoje, f) }];
         case 'resumo':
           return [{ texto: textoResumoCarteira(await this.repo.carregarCarteira(), hoje, f) }];
+        case 'clientes':
+          return this.processar(userId, { tipo: 'consultar', dados: { tipo: 'listar_clientes', cliente: args.trim() || null, data_inicio: null, data_fim: null } }, `/clientes ${args}`);
         case 'cliente':
-          if (!args.trim()) return [{ texto: 'Uso: /cliente <code>nome</code>' }];
+          if (!args.trim()) return [{ texto: 'Uso: /cliente <code>nome ou documento</code>' }];
           return this.processar(userId, { tipo: 'consultar', dados: { tipo: 'saldo_cliente', cliente: args.trim(), data_inicio: null, data_fim: null } }, `/cliente ${args}`);
         default:
           return [{ texto: 'Comando desconhecido. Veja /ajuda.' }];
@@ -780,6 +783,13 @@ export class Aplicacao {
     const f = await this.fmt();
     if (d.tipo === 'saldo_cliente') {
       if (!d.cliente) return [{ texto: 'De qual cliente?' }];
+      // Também aceita documento: "/cliente 112.198.194-17"
+      const doc = /\d{3}/.test(d.cliente) ? parseDocumento(d.cliente) : null;
+      const porDoc = doc && !('erro' in doc) ? await this.repo.clientePorDocumento(doc) : null;
+      if (porDoc) {
+        const c = await this.repo.carregarCarteira({ clienteId: porDoc.id });
+        return [{ texto: textoCliente(c, porDoc.id, hoje, f) }];
+      }
       const clientes = await this.repo.listarClientes();
       const res = resolverCliente(d.cliente, clientes);
       if (res.tipo === 'unico') {
@@ -791,6 +801,8 @@ export class Aplicacao {
     }
     const c = await this.repo.carregarCarteira();
     switch (d.tipo) {
+      case 'listar_clientes':
+        return [{ texto: textoClientes(c, d.cliente, hoje, f) }];
       case 'atrasados':
         return [{ texto: textoAtrasados(c, hoje, f) }];
       case 'resumo':
@@ -808,7 +820,7 @@ export class Aplicacao {
     const res = resolverCliente(nome, clientes);
     const opcoes = res.tipo === 'ambiguo' ? res.opcoes : (await this.repo.buscarClientes(nome, 4)).filter((c) => c.similaridade >= 0.25);
     if (opcoes.length === 0) return [{ texto: `Não encontrei <b>${escapar(nome)}</b>.` }];
-    return [{ texto: `Qual deles? Use /cliente com o nome completo:\n${opcoes.map((o) => `• ${escapar(o.nome)}`).join('\n')}` }];
+    return [{ texto: `Qual deles? Use /cliente com o nome completo ou o documento:\n${opcoes.map((o) => `• ${escapar(o.nome)}`).join('\n')}` }];
   }
 
   // ─────────────────────────── erros ───────────────────────────

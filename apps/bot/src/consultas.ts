@@ -1,6 +1,7 @@
 import {
   aReceberNoPeriodo,
   formatarDocumento,
+  normalizarNome,
   calcularKpis,
   inicioSemana,
   listarAtrasados,
@@ -88,6 +89,38 @@ export function textoCliente(c: CarteiraCompleta, clienteId: string, hoje: DataI
     }
   }
   return linhas.join('\n');
+}
+
+/** Lista de clientes: nome completo + documento, saldo e operações. Filtro por nome, apelido ou documento. */
+export function textoClientes(c: CarteiraCompleta, filtro: string | null, hoje: DataISO, f: Formatador, limite = 40): string {
+  const termo = filtro ? normalizarNome(filtro) : '';
+  const digitos = filtro ? filtro.toUpperCase().replace(/[^A-Z0-9]/g, '') : '';
+  const lista = [...c.clientes.values()]
+    .filter((cl) => cl.ativo)
+    .filter(
+      (cl) =>
+        !termo ||
+        normalizarNome(cl.nome).includes(termo) ||
+        cl.apelidos.some((a) => normalizarNome(a).includes(termo)) ||
+        (digitos.length >= 3 && !!cl.documento?.includes(digitos)),
+    )
+    .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  if (lista.length === 0) {
+    return filtro ? `Nenhum cliente encontrado para <b>${escapar(filtro)}</b>.` : 'Nenhum cliente cadastrado ainda.';
+  }
+  const linhas = lista.slice(0, limite).map((cl) => {
+    const m = metricasCliente(c.carteira, cl.id, hoje);
+    const apelidos = cl.apelidos.length ? ` <i>(${escapar(cl.apelidos.join(', '))})</i>` : '';
+    const situacao = m.operacoesEmAberto ? `saldo ${f.dinheiro(m.saldoAtual)} · ${m.operacoesEmAberto} em aberto` : 'sem empréstimo em aberto';
+    return `• <b>${escapar(cl.nome)}</b>${apelidos}\n   ${formatarDocumento(cl.documento_tipo, cl.documento)} · ${situacao}`;
+  });
+  return [
+    `👥 <b>Clientes</b>${filtro ? ` com "${escapar(filtro)}"` : ''} (${lista.length})`,
+    ...linhas,
+    ...(lista.length > limite ? [`… e mais ${lista.length - limite}. Filtre: /clientes <code>nome ou documento</code>`] : []),
+    '',
+    'Detalhes: /cliente <code>nome ou documento</code>',
+  ].join('\n');
 }
 
 export function textoResumoCarteira(c: CarteiraCompleta, hoje: DataISO, f: Formatador): string {

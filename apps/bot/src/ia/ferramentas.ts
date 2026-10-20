@@ -96,11 +96,11 @@ export const FERRAMENTAS = [
       properties: {
         tipo: {
           type: 'string',
-          enum: ['a_receber_periodo', 'atrasados', 'saldo_cliente', 'resumo'],
+          enum: ['a_receber_periodo', 'atrasados', 'saldo_cliente', 'listar_clientes', 'resumo'],
           description:
-            'a_receber_periodo: quanto entra num período; atrasados: quem está devendo; saldo_cliente: situação de um cliente; resumo: visão geral',
+            'a_receber_periodo: quanto entra num período; atrasados: quem está devendo; saldo_cliente: situação de UM cliente; listar_clientes: lista/busca de clientes (nome e documento); resumo: visão geral da carteira',
         },
-        cliente: texto,
+        cliente: nulo(texto, 'saldo_cliente: nome ou documento do cliente. listar_clientes: filtro (parte do nome ou do documento).'),
         data_inicio: nulo(data, 'Início do período (YYYY-MM-DD).'),
         data_fim: nulo(data, 'Fim do período (YYYY-MM-DD).'),
       },
@@ -167,7 +167,7 @@ export const SCHEMAS = {
     acrescimo: reais.nullable(),
   }),
   consultar: z.object({
-    tipo: z.enum(['a_receber_periodo', 'atrasados', 'saldo_cliente', 'resumo']),
+    tipo: z.enum(['a_receber_periodo', 'atrasados', 'saldo_cliente', 'listar_clientes', 'resumo']),
     cliente: z.string().nullable(),
     data_inicio: dataISO.nullable(),
     data_fim: dataISO.nullable(),

@@ -64,7 +64,7 @@ Escreva normalmente, por exemplo:
 • <i>Ana pegou 500, paga 600 em 4x semanais começando sexta</i>
 • <i>Carlos pagou 1200</i>
 • <i>joga o vencimento do Carlos pro dia 30 com mais 100</i>
-• <i>quanto entra essa semana?</i> · <i>quem tá atrasado?</i> · <i>saldo da Ana</i>
+• <i>quanto entra essa semana?</i> · <i>quem tá atrasado?</i> · <i>saldo da Ana</i> · <i>liste os clientes</i>
 
 Nada é gravado sem você confirmar ✅.
 
@@ -74,6 +74,7 @@ Nada é gravado sem você confirmar ✅.
 /hoje — vencimentos de hoje e atrasados
 /semana — a receber nesta semana
 /atrasados — lista de atrasados
-/cliente <code>nome</code> — situação do cliente
+/clientes <code>[filtro]</code> — lista com nome e documento
+/cliente <code>nome ou documento</code> — ficha do cliente
 /resumo — visão geral da carteira
 /ajuda — esta mensagem`;

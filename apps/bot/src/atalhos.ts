@@ -85,6 +85,9 @@ export function intencaoRapida(texto: string): IntencaoParcial | null {
   if (/^(emprestimo|novo emprestimo|emprestar|lancar emprestimo|registrar emprestimo)$/.test(t)) {
     return { tipo: 'criar_operacao', dados: { ...VAZIO_OPERACAO } };
   }
+  if (/^((liste|listar|lista|mostre|mostrar|ver)( os| de| meus)? clientes|clientes|meus clientes|lista de clientes)$/.test(t)) {
+    return { tipo: 'consultar', dados: { tipo: 'listar_clientes', cliente: null, data_inicio: null, data_fim: null } };
+  }
   if (/^(pagamento|registrar pagamento|recebi|recebimento|baixa)$/.test(t)) {
     return { tipo: 'registrar_pagamento', dados: { cliente: null, valor: null, data: null, forma: null } };
   }

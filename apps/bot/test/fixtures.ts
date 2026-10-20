@@ -118,3 +118,9 @@ export const PARCIAIS: { texto: string; esperado: IntencaoParcial }[] = [
     },
   },
 ];
+
+/** Buscas de clientes que passam pela IA (as frases curtas vão por atalho). */
+export const BUSCAS: { texto: string; esperado: IntencaoParcial }[] = [
+  { texto: 'clientes com Silva', esperado: { tipo: 'consultar', dados: { tipo: 'listar_clientes', cliente: 'Silva', data_inicio: null, data_fim: null } } },
+  { texto: 'qual o CPF do Marcos?', esperado: { tipo: 'consultar', dados: { tipo: 'listar_clientes', cliente: 'Marcos Silva', data_inicio: null, data_fim: null } } },
+];
