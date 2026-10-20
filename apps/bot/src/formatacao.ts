@@ -80,6 +80,7 @@ Nada é gravado sem você confirmar ✅.
 /semana — a receber nesta semana
 /atrasados — lista de atrasados
 /clientes <code>[filtro]</code> — lista com nome e documento
+/pesquisa — buscar cliente por nome ou documento (ex.: <code>P</code>)
 /cliente <code>nome ou documento</code> — ficha do cliente
 /editar <code>[nome ou documento]</code> — corrigir nome, apelidos, telefone, documento
 /resumo — visão geral da carteira

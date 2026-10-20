@@ -49,6 +49,14 @@ describe('lista de clientes', () => {
     expect(textoClientes(carteira, '0001-81', hoje)).toContain('Ana Paula Silva');
     expect(textoClientes(carteira, 'zé', hoje)).toContain('Nenhum cliente encontrado');
   });
+  it('termo curto é "começa com"; a partir de 3 letras, "contém"', () => {
+    expect(textoClientes(carteira, 'P', hoje)).toContain('Pesquisa "P"</b> · 1 cliente');
+    expect(textoClientes(carteira, 'b', hoje)).toContain('Beatriz Lima'); // apelido/nome com B
+    expect(textoClientes(carteira, 'li', hoje)).toContain('Nenhum cliente encontrado'); // ninguém começa com "li"
+    expect(textoClientes(carteira, 'lim', hoje)).toContain('Beatriz Lima');
+    expect(textoClientes(carteira, '11', hoje)).toContain('Ana Paula Silva');
+    expect(textoClientes(carteira, '11', hoje)).toContain('Pedro Miquiles');
+  });
   it('botões abrem a ficha de cada cliente, 2 por linha', () => {
     expect(botoesClientes(carteira, null)).toEqual([
       [{ texto: '1. Ana Paula Silva', dados: 'fc:2' }, { texto: '2. Beatriz Lima', dados: 'fc:3' }],

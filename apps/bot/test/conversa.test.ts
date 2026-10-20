@@ -419,3 +419,27 @@ describe('cadastro de dívida já vencida (o caso relatado)', () => {
     expect(botao(r, 'ed:')).toBeDefined();
   });
 });
+
+describe('/pesquisa', () => {
+  const repo = new RepoMemoria();
+  const app = new Aplicacao(repo as unknown as Repositorio, new IAFake({}), { info: () => {}, error: (e) => console.error(e) });
+
+  it('pede o termo, busca pelo começo do nome e devolve botões das fichas', async () => {
+    await repo.criarCliente({ nome: 'Pedro Miquiles', documento: { tipo: 'cpf', numero: '11219819417' } });
+    await repo.criarCliente({ nome: 'Paula Souza', documento: { tipo: 'cpf', numero: '52998224725' } });
+    await repo.criarCliente({ nome: 'Ana Paula', documento: { tipo: 'cpf', numero: '68826079404' } });
+    expect(textos(await app.comando(U, 'pesquisa', ''))).toContain('Digite o <b>nome</b> ou o <b>documento</b>');
+    const r = await app.mensagem(U, 'P');
+    expect(textos(r)).toContain('Pesquisa "P"</b> · 2 clientes');
+    expect(textos(r)).not.toContain('Ana Paula');
+    expect(r[0]!.teclado!.flat().map((b) => b.texto)).toEqual(['1. Paula Souza', '2. Pedro Miquiles']);
+    const ficha = await app.callback(U, r[0]!.teclado![0]![0]!.dados);
+    expect(textos(ficha)).toContain('Paula Souza');
+    expect(ficha[0]!.teclado![0]![0]!.copiar).toBe('529.982.247-25');
+  });
+
+  it('direto com argumento: documento e nada encontrado', async () => {
+    expect(textos(await app.comando(U, 'pesquisa', '688.260'))).toContain('Ana Paula');
+    expect(textos(await app.comando(U, 'pesquisa', 'Zé'))).toContain('Nenhum cliente encontrado');
+  });
+});

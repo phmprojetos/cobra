@@ -117,26 +117,28 @@ export function botoesClientes(c: CarteiraCompleta, filtro: string | null, limit
   return linhas;
 }
 
-function filtrarClientes(c: CarteiraCompleta, filtro: string | null) {
-  const termo = filtro ? normalizarNome(filtro) : '';
-  const digitos = filtro ? filtro.toUpperCase().replace(/[^A-Z0-9]/g, '') : '';
-  return [...c.clientes.values()]
-    .filter((cl) => cl.ativo)
-    .filter(
-      (cl) =>
-        !termo ||
-        normalizarNome(cl.nome).includes(termo) ||
-        cl.apelidos.some((a) => normalizarNome(a).includes(termo)) ||
-        (digitos.length >= 3 && !!cl.documento?.includes(digitos)),
-    )
-    .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+/**
+ * Pesquisa de clientes. Com número, procura no documento; com letras, no nome e nos apelidos.
+ * Termo curto (1–2 caracteres) é "começa com" ("P" → todos que começam com P); a partir de 3, "contém".
+ */
+export function filtrarClientes(c: CarteiraCompleta, filtro: string | null) {
+  const ativos = [...c.clientes.values()].filter((cl) => cl.ativo).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  const termo = filtro?.trim() ?? '';
+  if (!termo) return ativos;
+  const casa = (alvo: string, t: string) => (t.length < 3 ? alvo.startsWith(t) : alvo.includes(t));
+  if (/\d/.test(termo)) {
+    const digitos = termo.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    return ativos.filter((cl) => !!cl.documento && casa(cl.documento, digitos));
+  }
+  const t = normalizarNome(termo);
+  return ativos.filter((cl) => [cl.nome, ...cl.apelidos].some((n) => casa(normalizarNome(n), t)));
 }
 
 /** Lista enxuta de clientes: nome completo, documento e nº de contratos. Filtro por nome, apelido ou documento. */
 export function textoClientes(c: CarteiraCompleta, filtro: string | null, hoje: DataISO, limite = 40): string {
   const lista = filtrarClientes(c, filtro);
   if (lista.length === 0) {
-    return filtro ? `Nenhum cliente encontrado para <b>${escapar(filtro)}</b>.` : 'Nenhum cliente cadastrado ainda.';
+    return filtro ? `🔎 Nenhum cliente encontrado para <b>${escapar(filtro)}</b>.\nTente de novo: /pesquisa` : 'Nenhum cliente cadastrado ainda.';
   }
   const blocos = lista.slice(0, limite).map((cl, i) => {
     const m = metricasCliente(c.carteira, cl.id, hoje);
@@ -147,10 +149,10 @@ export function textoClientes(c: CarteiraCompleta, filtro: string | null, hoje: 
     ].join('\n');
   });
   return [
-    `👥 <b>Clientes</b>${filtro ? ` com "${escapar(filtro)}"` : ''} · ${lista.length}`,
+    filtro ? `🔎 <b>Pesquisa "${escapar(filtro)}"</b> · ${lista.length} cliente${lista.length > 1 ? 's' : ''}` : `👥 <b>Clientes</b> · ${lista.length}`,
     '',
     blocos.join('\n\n'),
-    ...(lista.length > limite ? ['', `… e mais ${lista.length - limite}. Filtre: /clientes <code>nome ou documento</code>`] : []),
+    ...(lista.length > limite ? ['', `… e mais ${lista.length - limite}. Refine em /pesquisa`] : []),
     '',
     'Toque no documento para copiar, ou no botão para abrir a ficha.',
   ].join('\n');

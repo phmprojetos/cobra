@@ -144,6 +144,7 @@ const ESTADOS_TEXTO = [
   'aguardando_valor_edicao',
   'aguardando_devedor',
   'aguardando_valor_pagamento',
+  'aguardando_pesquisa',
 ];
 
 /** Pagamento sendo montado: o que já se sabe (valor/data podem vir da frase ou do atalho). */
@@ -335,6 +336,12 @@ export class Aplicacao {
           return this.iniciarEdicao(userId, args.trim() || null, null, null);
         case 'clientes':
           return this.processar(userId, { tipo: 'consultar', dados: { tipo: 'listar_clientes', cliente: args.trim() || null, data_inicio: null, data_fim: null } }, `/clientes ${args}`);
+        case 'pesquisa':
+          if (!args.trim()) {
+            await this.repo.criarSessao(userId, 'aguardando_pesquisa', {});
+            return [{ texto: '🔎 Digite o <b>nome</b> ou o <b>documento</b> do cliente.\nPode ser só o começo: <code>P</code> traz todos que começam com P.' }];
+          }
+          return this.pesquisar(args);
         case 'cliente':
           if (!args.trim()) return [{ texto: 'Uso: /cliente <code>nome ou documento</code>' }];
           return this.processar(userId, { tipo: 'consultar', dados: { tipo: 'saldo_cliente', cliente: args.trim(), data_inicio: null, data_fim: null } }, `/cliente ${args}`);
@@ -905,6 +912,8 @@ export class Aplicacao {
         const { parcelaId } = payload as { parcelaId: string };
         return this.planejarAdiamento(userId, parcelaId, data, `Adiar para ${texto}`);
       }
+      case 'aguardando_pesquisa':
+        return this.pesquisar(texto);
       case 'aguardando_devedor':
         return this.fluxoPagamento(userId, { ...(payload as Omit<PagamentoEmAndamento, 'nome'>), nome: texto.trim() });
       case 'aguardando_valor_pagamento': {
@@ -1374,6 +1383,12 @@ export class Aplicacao {
         return [{ texto: textoAReceber(c, { inicio, fim: fim < inicio ? inicio : fim }, hoje, f) }];
       }
     }
+  }
+
+  private async pesquisar(termo: string): Promise<Resposta[]> {
+    const [c, hoje] = await Promise.all([this.repo.carregarCarteira(), this.repo.hoje()]);
+    const t = termo.trim();
+    return [{ texto: textoClientes(c, t, hoje), teclado: botoesClientes(c, t) }];
   }
 
   /** Ficha do cliente com botão que copia o documento. */
