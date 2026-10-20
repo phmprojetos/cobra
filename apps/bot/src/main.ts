@@ -109,6 +109,16 @@ const servidor = createServer((req, res) => {
   });
 });
 
+// Em dev (tsx watch) o processo anterior pode ainda segurar a porta por alguns instantes: tenta de novo.
+let tentativas = 0;
+servidor.on('error', (err: NodeJS.ErrnoException) => {
+  if (err.code === 'EADDRINUSE' && tentativas++ < 20) {
+    setTimeout(() => servidor.listen(config.PORT), 500);
+    return;
+  }
+  log.error({ err }, 'servidor http falhou');
+  process.exit(1);
+});
 servidor.listen(config.PORT, () => log.info({ porta: config.PORT, modo: config.BOT_MODO }, 'servidor no ar'));
 await registrarComandos(bot).catch((err) => log.error({ err }, 'setMyCommands falhou'));
 
@@ -126,6 +136,8 @@ for (const sinal of ['SIGINT', 'SIGTERM'] as const) {
   process.once(sinal, () => {
     log.info({ sinal }, 'encerrando');
     servidor.close();
+    // Não espera o long polling terminar: libera a porta e sai em no máximo 2 s.
+    setTimeout(() => process.exit(0), 2_000).unref();
     void bot.stop().finally(() => process.exit(0));
   });
 }
