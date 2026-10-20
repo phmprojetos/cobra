@@ -2,7 +2,7 @@ import { type CarteiraCompleta, type ClienteRow, type OperacaoRow, type ParcelaR
 import { paraOperacao, paraParcela } from '@cobra/db';
 import { describe, expect, it } from 'vitest';
 import { intencaoRapida } from '../src/atalhos';
-import { textoClientes } from '../src/consultas';
+import { botoesClientes, textoClientes } from '../src/consultas';
 
 const agora = '2026-10-20T00:00:00Z';
 const cli = (id: string, nome: string, tipo: ClienteRow['documento_tipo'], doc: string, apelidos: string[] = []): ClienteRow => ({
@@ -36,9 +36,9 @@ describe('lista de clientes', () => {
   it('só nome completo, tipo + número do documento e nº de contratos, em ordem alfabética', () => {
     const t = textoClientes(carteira, null, hoje);
     expect(t).toContain('👥 <b>Clientes</b> · 3');
-    expect(t).toContain('<b>1. Ana Paula Silva</b>\n    🪪 CNPJ 11.222.333/0001-81\n    📄 nenhum contrato');
-    expect(t).toContain('<b>2. Beatriz Lima</b>\n    🪪 RG 123456789');
-    expect(t).toContain('<b>3. Pedro Miquiles</b>\n    🪪 CPF 112.198.194-17\n    📄 1 contrato · 1 em aberto');
+    expect(t).toContain('<b>1. Ana Paula Silva</b>\n    🪪 CNPJ <code>11.222.333/0001-81</code>\n    📄 nenhum contrato');
+    expect(t).toContain('<b>2. Beatriz Lima</b>\n    🪪 RG <code>123456789</code>');
+    expect(t).toContain('<b>3. Pedro Miquiles</b>\n    🪪 CPF <code>112.198.194-17</code>\n    📄 1 contrato · 1 em aberto');
     expect(t).not.toContain('Pedrão');
     expect(t).not.toContain('R$');
   });
@@ -48,6 +48,13 @@ describe('lista de clientes', () => {
     expect(textoClientes(carteira, '112.198', hoje)).toContain('Pedro Miquiles');
     expect(textoClientes(carteira, '0001-81', hoje)).toContain('Ana Paula Silva');
     expect(textoClientes(carteira, 'zé', hoje)).toContain('Nenhum cliente encontrado');
+  });
+  it('botões abrem a ficha de cada cliente, 2 por linha', () => {
+    expect(botoesClientes(carteira, null)).toEqual([
+      [{ texto: '1. Ana Paula Silva', dados: 'fc:2' }, { texto: '2. Beatriz Lima', dados: 'fc:3' }],
+      [{ texto: '3. Pedro Miquiles', dados: 'fc:1' }],
+    ]);
+    expect(botoesClientes(carteira, 'bia')).toEqual([[{ texto: '1. Beatriz Lima', dados: 'fc:3' }]]);
   });
   it('limite e lista vazia', () => {
     expect(textoClientes(carteira, null, hoje, 2)).toContain('… e mais 1');

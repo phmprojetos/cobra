@@ -44,6 +44,8 @@ export interface Botao {
   dados: string;
   /** Se presente, o botão é um link (usado no canal de alertas). */
   url?: string;
+  /** Se presente, o botão copia este texto para a área de transferência (copy_text). */
+  copiar?: string;
 }
 
 export interface Resposta {

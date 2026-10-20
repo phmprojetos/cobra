@@ -19,7 +19,9 @@ export function opcoesEnvio(r: Resposta) {
   return {
     parse_mode: 'HTML' as const,
     reply_markup: InlineKeyboard.from(
-      r.teclado.map((linha) => linha.map((b) => (b.url ? InlineKeyboard.url(b.texto, b.url) : InlineKeyboard.text(b.texto, b.dados)))),
+      r.teclado.map((linha) => linha.map((b) =>
+          b.url ? InlineKeyboard.url(b.texto, b.url) : b.copiar ? InlineKeyboard.copyText(b.texto, b.copiar) : InlineKeyboard.text(b.texto, b.dados),
+        )),
     ),
   };
 }

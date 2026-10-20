@@ -47,6 +47,7 @@ import {
   textoAReceber,
   textoAtrasados,
   textoCliente,
+  botoesClientes,
   textoClientes,
   textoResumoCarteira,
   textoResumoDiario,
@@ -379,6 +380,8 @@ export class Aplicacao {
           return this.escolherClienteEdicao(userId, id, Number(extra));
         case 'pa':
           return this.escolherParcela(userId, id, Number(extra));
+        case 'fc':
+          return this.fichaCliente(id);
         // Botões dos alertas de parcela
         case 'rt':
           return this.recebidoTotal(userId, id);
@@ -1347,14 +1350,12 @@ export class Aplicacao {
       const doc = /\d{3}/.test(d.cliente) ? parseDocumento(d.cliente) : null;
       const porDoc = doc && !('erro' in doc) ? await this.repo.clientePorDocumento(doc) : null;
       if (porDoc) {
-        const c = await this.repo.carregarCarteira({ clienteId: porDoc.id });
-        return [{ texto: textoCliente(c, porDoc.id, hoje, f) }];
+        return this.fichaCliente(porDoc.id);
       }
       const clientes = await this.repo.listarClientes();
       const res = resolverCliente(d.cliente, clientes);
       if (res.tipo === 'unico') {
-        const c = await this.repo.carregarCarteira({ clienteId: res.cliente.id });
-        return [{ texto: textoCliente(c, res.cliente.id, hoje, f) }];
+        return this.fichaCliente(res.cliente.id);
       }
       // Reaproveita a escolha de cliente com a intenção de consulta
       return this.sugerirClientes(d.cliente);
@@ -1362,7 +1363,7 @@ export class Aplicacao {
     const c = await this.repo.carregarCarteira();
     switch (d.tipo) {
       case 'listar_clientes':
-        return [{ texto: textoClientes(c, d.cliente, hoje) }];
+        return [{ texto: textoClientes(c, d.cliente, hoje), teclado: botoesClientes(c, d.cliente) }];
       case 'atrasados':
         return [{ texto: textoAtrasados(c, hoje, f) }];
       case 'resumo':
@@ -1373,6 +1374,16 @@ export class Aplicacao {
         return [{ texto: textoAReceber(c, { inicio, fim: fim < inicio ? inicio : fim }, hoje, f) }];
       }
     }
+  }
+
+  /** Ficha do cliente com botão que copia o documento. */
+  private async fichaCliente(clienteId: string): Promise<Resposta[]> {
+    const [c, hoje, f] = await Promise.all([this.repo.carregarCarteira({ clienteId }), this.repo.hoje(), this.fmt()]);
+    const cli = c.clientes.get(clienteId);
+    if (!cli) return [{ texto: 'Cliente não encontrado.' }];
+    const doc = cli.documento ? formatarDocumento(cli.documento_tipo, cli.documento).replace(/^RG /, '') : null;
+    const rotulo: string = ({ cpf: 'CPF', cnpj: 'CNPJ', rg: 'RG' } as Record<string, string>)[cli.documento_tipo ?? ''] ?? 'documento';
+    return [{ texto: textoCliente(c, clienteId, hoje, f), ...(doc ? { teclado: [[{ texto: `📋 Copiar ${rotulo}`, dados: '', copiar: doc }]] } : {}) }];
   }
 
   private async sugerirClientes(nome: string): Promise<Resposta[]> {

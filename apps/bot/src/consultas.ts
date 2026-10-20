@@ -14,7 +14,7 @@ import {
   type Periodo,
 } from '@cobra/core';
 import type { CarteiraCompleta } from '@cobra/db';
-import { escapar, type Formatador } from './formatacao';
+import { escapar, type Botao, type Formatador } from './formatacao';
 
 function nomeCliente(c: CarteiraCompleta, operacaoId: string): string {
   const op = c.operacoes.find((o) => o.id === operacaoId);
@@ -75,7 +75,8 @@ export function textoCliente(c: CarteiraCompleta, clienteId: string, hoje: DataI
     })
     .sort((a, b) => (a.vencimento < b.vencimento ? -1 : 1));
   const linhas = [
-    `👤 <b>${escapar(cli?.nome ?? '?')}</b> · ${formatarDocumento(cli?.documento_tipo ?? null, cli?.documento ?? null)}`,
+    `👤 <b>${escapar(cli?.nome ?? '?')}</b>`,
+    `🪪 ${documentoRotulado(cli?.documento_tipo ?? null, cli?.documento ?? null)}`,
     `Saldo em aberto: <b>${f.dinheiro(m.saldoAtual)}</b>`,
     `Total emprestado: ${f.dinheiro(m.totalEmprestado)} · recebido: ${f.dinheiro(m.totalRecebido)}`,
     `Operações: ${m.operacoes} (${m.operacoesEmAberto} em aberto) · renegociações: ${m.renegociacoes}`,
@@ -94,10 +95,10 @@ export function textoCliente(c: CarteiraCompleta, clienteId: string, hoje: DataI
 const ROTULO_DOCUMENTO: Record<string, string> = { cpf: 'CPF', cnpj: 'CNPJ', rg: 'RG', outro: 'Doc.' };
 
 /** "CPF 529.982.247-25", "CNPJ 11.222.333/0001-81", "RG 123456789". */
-function documentoRotulado(tipo: string | null, numero: string | null): string {
+export function documentoRotulado(tipo: string | null, numero: string | null): string {
   if (!tipo || !numero) return 'sem documento';
   const rotulo = ROTULO_DOCUMENTO[tipo] ?? 'Doc.';
-  return `${rotulo} ${formatarDocumento(tipo, numero).replace(/^RG /, '')}`;
+  return `${rotulo} <code>${formatarDocumento(tipo, numero).replace(/^RG /, '')}</code>`;
 }
 
 function textoContratos(total: number, emAberto: number): string {
@@ -106,11 +107,20 @@ function textoContratos(total: number, emAberto: number): string {
   return emAberto ? `${base} · ${emAberto} em aberto` : `${base} · todos quitados`;
 }
 
-/** Lista enxuta de clientes: nome completo, documento e nº de contratos. Filtro por nome, apelido ou documento. */
-export function textoClientes(c: CarteiraCompleta, filtro: string | null, hoje: DataISO, limite = 40): string {
+/** Botões da lista: um por cliente (2 por linha), abrindo a ficha direto. */
+export function botoesClientes(c: CarteiraCompleta, filtro: string | null, limite = 20): Botao[][] {
+  const lista = filtrarClientes(c, filtro).slice(0, limite);
+  const linhas: Botao[][] = [];
+  for (let i = 0; i < lista.length; i += 2) {
+    linhas.push(lista.slice(i, i + 2).map((cl, j) => ({ texto: `${i + j + 1}. ${cl.nome}`, dados: `fc:${cl.id}` })));
+  }
+  return linhas;
+}
+
+function filtrarClientes(c: CarteiraCompleta, filtro: string | null) {
   const termo = filtro ? normalizarNome(filtro) : '';
   const digitos = filtro ? filtro.toUpperCase().replace(/[^A-Z0-9]/g, '') : '';
-  const lista = [...c.clientes.values()]
+  return [...c.clientes.values()]
     .filter((cl) => cl.ativo)
     .filter(
       (cl) =>
@@ -120,6 +130,11 @@ export function textoClientes(c: CarteiraCompleta, filtro: string | null, hoje: 
         (digitos.length >= 3 && !!cl.documento?.includes(digitos)),
     )
     .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+}
+
+/** Lista enxuta de clientes: nome completo, documento e nº de contratos. Filtro por nome, apelido ou documento. */
+export function textoClientes(c: CarteiraCompleta, filtro: string | null, hoje: DataISO, limite = 40): string {
+  const lista = filtrarClientes(c, filtro);
   if (lista.length === 0) {
     return filtro ? `Nenhum cliente encontrado para <b>${escapar(filtro)}</b>.` : 'Nenhum cliente cadastrado ainda.';
   }
@@ -137,7 +152,7 @@ export function textoClientes(c: CarteiraCompleta, filtro: string | null, hoje: 
     blocos.join('\n\n'),
     ...(lista.length > limite ? ['', `… e mais ${lista.length - limite}. Filtre: /clientes <code>nome ou documento</code>`] : []),
     '',
-    'Ficha completa: /cliente <code>nome ou documento</code>',
+    'Toque no documento para copiar, ou no botão para abrir a ficha.',
   ].join('\n');
 }
 
