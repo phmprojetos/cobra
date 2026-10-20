@@ -3,25 +3,7 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 
 export type Database = {
   
-  "graphql_public": {
-          Tables: {
-            [_ in never]: never
-          }
-          Views: {
-            [_ in never]: never
-          }
-          Functions: {
-            "graphql":
-{ Args: { "extensions"?: Json,"operationName"?: string,"query"?: string,"variables"?: Json }; Returns: Json
-                           }
-          }
-          Enums: {
-            [_ in never]: never
-          }
-          CompositeTypes: {
-            [_ in never]: never
-          }
-        },"public": {
+  "public": {
           Tables: {
             "clientes": {
                   Row: {
@@ -327,11 +309,7 @@ export type CompositeTypes<
   : never
 
 export const Constants = {
-  "graphql_public": {
-          Enums: {
-            
-          }
-        },"public": {
+  "public": {
           Enums: {
             "origem_lancamento": ["telegram", "web"],"periodicidade": ["semanal", "quinzenal", "mensal"],"status_operacao": ["ativa", "quitada", "atrasada", "renegociada", "perdida", "cancelada"],"status_parcela": ["aberta", "parcial", "paga", "atrasada", "cancelada"],"tipo_operacao": ["unica", "parcelada"],"tipo_regra_notificacao": ["lembrete_antes", "no_dia", "atraso", "resumo_diario", "resumo_semanal"]
           }

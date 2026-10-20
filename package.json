@@ -14,12 +14,11 @@
     "test:llm": "pnpm --filter @cobra/bot test:llm",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "db:types": "supabase gen types typescript --linked > packages/db/src/database.types.ts",
-    "db:link": "supabase link",
-    "db:push": "supabase db push",
-    "db:seed": "supabase db push --include-seed",
+    "db:types": "sh -c 'set -a; . ./.env; supabase gen types typescript --db-url \"$SUPABASE_DB_URL\" --schema public > packages/db/src/database.types.ts'",
+    "db:push": "sh -c 'set -a; . ./.env; supabase db push --db-url \"$SUPABASE_DB_URL\"'",
+    "db:seed": "sh -c 'set -a; . ./.env; supabase db push --include-seed --db-url \"$SUPABASE_DB_URL\"'",
     "test:db": "RUN_DB_TESTS=1 pnpm -r --if-present test",
-    "demo": "DEMO=1 pnpm --filter @cobra/web exec next dev --port 3100"
+    "demo": "DEMO=1 pnpm --filter @cobra/web dev"
   },
   "devDependencies": {
     "@types/node": "^22",
