@@ -74,7 +74,7 @@ const ROTULOS: Record<string, string> = {
   atraso: 'Atraso',
   resumo_diario: 'Resumo diário',
   resumo_semanal: 'Resumo semanal',
-  lista_atrasados: 'Lista de atrasados',
+  lista_atrasados: 'Devedores do dia',
 };
 const DIAS = ['', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado', 'domingo'];
 

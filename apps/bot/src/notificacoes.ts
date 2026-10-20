@@ -1,6 +1,7 @@
 import {
   avaliarNotificacoes,
   dataLocal,
+  horaLocal,
   diferencaDias,
   operacaoEmAberto,
   saldoParcela,
@@ -8,7 +9,7 @@ import {
   type ParcelaParaAlerta,
 } from '@cobra/core';
 import { atualizarStatus, paraRegra, type CarteiraCompleta, type Repositorio } from '@cobra/db';
-import { mensagemGrupoParcelas, mensagemListaAtrasados, type TipoGrupo } from './canal';
+import { mensagemDevedoresDoDia, mensagemGrupoParcelas, type TipoGrupo } from './canal';
 import { textoResumoDiario, textoResumoSemanal } from './consultas';
 import { escapar, Formatador, type Botao, type Resposta } from './formatacao';
 import type { Log } from './aplicacao';
@@ -134,9 +135,9 @@ export async function executarJobNotificacoes(
         ? { texto: textoResumoDiario(carteira, a.dataReferencia, f) }
         : a.tipo === 'resumo_semanal'
           ? { texto: textoResumoSemanal(carteira, a.dataReferencia, f) }
-          : mensagemListaAtrasados(carteira, a.dataReferencia, f, botUsername);
-    // Lista vazia: marca como enviada (não reavalia o dia todo) sem mandar mensagem.
-    envios.push({ resposta: resposta ?? { texto: '' }, chaves: [chave(a)] });
+          : // Devedores do dia: status do momento do envio; sem devedores, diz isso.
+            mensagemDevedoresDoDia(carteira, a.dataReferencia, horaLocal(agora, config.timezone), f, botUsername);
+    envios.push({ resposta, chaves: [chave(a)] });
   }
 
   const deParcela = alertas.filter((a): a is Extract<Alerta, { tipo: 'parcela' }> => a.tipo === 'parcela');

@@ -4,7 +4,7 @@ import type { Bot } from 'grammy';
 import { describe, expect, it, vi } from 'vitest';
 import { Aplicacao } from '../src/aplicacao';
 import { criarBot, opcoesEnvio } from '../src/bot';
-import { linkParcela, mensagemGrupoParcelas, mensagemListaAtrasados, mensagemNovoEmprestimo } from '../src/canal';
+import { linkParcela, mensagemDevedoresDoDia, mensagemGrupoParcelas, mensagemNovoEmprestimo } from '../src/canal';
 import { Formatador } from '../src/formatacao';
 
 const hoje = '2026-10-20';
@@ -61,14 +61,26 @@ describe('mensagens do canal', () => {
     expect(mensagemGrupoParcelas('atraso', ['p1'], carteira([par('p1', 'o1', '2026-10-17')]), hoje, f, 'bot')!.texto).toContain('Atrasados desde 17/10');
   });
 
-  it('lista diária de atrasados com dias, vencimento e documento', () => {
-    const c = carteira([par('p1', 'o1', '2026-10-15'), par('p2', 'o2', '2026-10-19'), par('p3', 'o2', '2026-11-01')]);
-    const m = mensagemListaAtrasados(c, hoje, f, 'bot')!;
-    expect(m.texto).toContain('🔴 <b>Hoje (20/10 (ter)) temos 2 contrato(s) atrasado(s)</b>');
-    expect(m.texto).toContain('Total vencido: <b>R$ 2.600,00</b>');
+  it('devedores do dia: vencem hoje + atrasados, com total, hora e documento', () => {
+    const c = carteira([par('p1', 'o1', '2026-10-15'), par('p2', 'o2', hoje), par('p3', 'o2', '2026-11-01')]);
+    const m = mensagemDevedoresDoDia(c, hoje, '13:00', f, 'bot');
+    expect(m.texto).toContain('📋 <b>Devedores do dia · 20/10 (ter)</b>');
+    expect(m.texto).toContain('2 contrato(s) · total <b>R$ 2.600,00</b> · <i>atualizado às 13:00</i>');
+    expect(m.texto).toContain('📅 <b>Vencem hoje</b> (1) · R$ 1.300,00\n• <b>Ana Paula</b> · parcela 1/2 — R$ 1.300,00');
+    expect(m.texto).toContain('🔴 <b>Atrasados</b> (1) · R$ 1.300,00');
     expect(m.texto).toContain('5 dia(s) de atraso · venceu 15/10 (qui) · 112.198.194-17');
-    expect(m.texto.indexOf('Pedro')).toBeLessThan(m.texto.indexOf('Ana')); // maior prioridade primeiro
-    expect(mensagemListaAtrasados(carteira([par('p3', 'o2', '2026-11-01')]), hoje, f, 'bot')).toBeNull();
+    expect(m.teclado!.map((l) => l[0]!.url)).toEqual(['https://t.me/bot?start=p_p2', 'https://t.me/bot?start=p_p1']);
+  });
+
+  it('sem devedores: mensagem explícita', () => {
+    const m = mensagemDevedoresDoDia(carteira([par('p3', 'o2', '2026-11-01')]), hoje, '18:00', f, 'bot');
+    expect(m.texto).toBe('✅ <b>Nenhum devedor hoje (20/10 (ter))</b>\nNinguém vence hoje e não há contratos atrasados.\n<i>atualizado às 18:00</i>');
+    expect(m.teclado).toBeUndefined();
+  });
+
+  it('só atrasados ou só de hoje', () => {
+    expect(mensagemDevedoresDoDia(carteira([par('p1', 'o1', '2026-10-15')]), hoje, '09:00', f, 'b').texto).not.toContain('Vencem hoje');
+    expect(mensagemDevedoresDoDia(carteira([par('p2', 'o2', hoje)]), hoje, '09:00', f, 'b').texto).not.toContain('Atrasados');
   });
 
   it('novo empréstimo', () => {

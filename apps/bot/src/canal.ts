@@ -61,20 +61,49 @@ export function mensagemGrupoParcelas(
   };
 }
 
-/** Lista diária: "Hoje temos estes contratos atrasados". Null quando não há atraso (canal quieto). */
-export function mensagemListaAtrasados(c: CarteiraCompleta, hoje: DataISO, f: Formatador, botUsername: string): Resposta | null {
-  const lista = listarAtrasados(c.carteira, hoje);
-  if (lista.length === 0) return null;
+/**
+ * Devedores do dia (enviada 3x ao dia, com o status do momento): quem vence hoje + quem está
+ * atrasado. Sem ninguém, diz isso explicitamente.
+ */
+export function mensagemDevedoresDoDia(c: CarteiraCompleta, hoje: DataISO, hora: string, f: Formatador, botUsername: string): Resposta {
   const ano = hoje.slice(0, 4);
-  const total = lista.reduce((a, x) => a + x.saldo, 0);
-  const linhas = lista.map((x) => {
-    const i = info(c, x.parcelaId)!;
-    return `• <b>${escapar(i.nome)}</b>${i.rotulo} — ${f.dinheiro(x.saldo)}\n   ${x.diasAtraso} dia(s) de atraso · venceu ${f.data(x.vencimento, ano)}${i.doc && i.doc !== '—' ? ` · ${i.doc}` : ''}`;
-  });
+  const atualizado = `atualizado às ${hora}`;
+  const abertas = new Set(c.operacoes.filter((o) => ['ativa', 'atrasada', 'renegociada'].includes(o.status)).map((o) => o.id));
+  const deHoje = c.parcelas
+    .filter((p) => abertas.has(p.operacao_id) && p.vencimento === hoje)
+    .map((p) => info(c, p.id)!)
+    .filter((i) => i.saldo > 0)
+    .sort((a, b) => b.saldo - a.saldo);
+  const atrasados = listarAtrasados(c.carteira, hoje);
+  if (deHoje.length === 0 && atrasados.length === 0) {
+    return { texto: `✅ <b>Nenhum devedor hoje (${f.data(hoje, ano)})</b>\nNinguém vence hoje e não há contratos atrasados.\n<i>${atualizado}</i>` };
+  }
+  const totalHoje = deHoje.reduce((a, i) => a + i.saldo, 0);
+  const totalAtraso = atrasados.reduce((a, x) => a + x.saldo, 0);
+  const linhas = [
+    `📋 <b>Devedores do dia · ${f.data(hoje, ano)}</b>`,
+    `${deHoje.length + atrasados.length} contrato(s) · total <b>${f.dinheiro(totalHoje + totalAtraso)}</b> · <i>${atualizado}</i>`,
+  ];
+  if (deHoje.length) {
+    linhas.push('', `📅 <b>Vencem hoje</b> (${deHoje.length}) · ${f.dinheiro(totalHoje)}`);
+    for (const i of deHoje) linhas.push(`• <b>${escapar(i.nome)}</b>${i.rotulo} — ${f.dinheiro(i.saldo)}`);
+  }
+  if (atrasados.length) {
+    linhas.push('', `🔴 <b>Atrasados</b> (${atrasados.length}) · ${f.dinheiro(totalAtraso)}`);
+    for (const x of atrasados) {
+      const i = info(c, x.parcelaId)!;
+      linhas.push(
+        `• <b>${escapar(i.nome)}</b>${i.rotulo} — ${f.dinheiro(x.saldo)}\n   ${x.diasAtraso} dia(s) de atraso · venceu ${f.data(x.vencimento, ano)}${i.doc && i.doc !== '—' ? ` · ${i.doc}` : ''}`,
+      );
+    }
+  }
   return {
-    texto: [`🔴 <b>Hoje (${f.data(hoje, ano)}) temos ${lista.length} contrato(s) atrasado(s)</b>`, `Total vencido: <b>${f.dinheiro(total)}</b>`, '', ...linhas].join('\n'),
+    texto: linhas.join('\n'),
     teclado: botoesLinks(
-      lista.map((x) => ({ nome: info(c, x.parcelaId)!.nome, valor: f.dinheiro(x.saldo), id: x.parcelaId })),
+      [
+        ...deHoje.map((i) => ({ nome: i.nome, valor: f.dinheiro(i.saldo), id: i.p.id })),
+        ...atrasados.map((x) => ({ nome: info(c, x.parcelaId)!.nome, valor: f.dinheiro(x.saldo), id: x.parcelaId })),
+      ],
       botUsername,
     ),
   };
