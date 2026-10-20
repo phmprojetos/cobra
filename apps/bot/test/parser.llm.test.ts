@@ -2,7 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { describe, expect, it } from 'vitest';
 import { InterpretadorClaude } from '../src/ia/interpretador';
 import { ehRascunho } from '../src/rascunho';
-import { BUSCAS, CLIENTES_FIXO, HOJE_FIXO, MENSAGENS, PARCIAIS } from './fixtures';
+import { BUSCAS, CLIENTES_FIXO, HOJE_FIXO, MENSAGENS, PARCIAIS, SO_JUROS } from './fixtures';
 
 /**
  * Teste contra a API real (custa tokens). Rode com `pnpm test:llm` e ANTHROPIC_API_KEY definida.
@@ -50,6 +50,10 @@ describe.skipIf(!process.env.ANTHROPIC_API_KEY)(`parser com ${modelo}`, () => {
   ])('edição: %s', async (texto, esperado) => {
     const r = await ia.interpretar(texto, ctx);
     expect(r).toMatchObject({ tipo: 'editar_cliente', dados: esperado });
+  });
+
+  it.each(SO_JUROS)('só juros: $texto', async ({ texto, esperado }) => {
+    expect(await ia.interpretar(texto, ctx)).toMatchObject(esperado);
   });
 
   it('falta valor: abre rascunho sem inventar números', async () => {

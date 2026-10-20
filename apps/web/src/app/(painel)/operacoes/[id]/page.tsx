@@ -14,6 +14,7 @@ const ACOES: Record<string, string> = {
   prorrogar: 'Prorrogação',
   renegociar: 'Renegociação',
   perda: 'Marcada como perda',
+  renovar: 'Renovação (pagou os juros)',
   cancelar: 'Cancelada',
 };
 
@@ -143,7 +144,12 @@ export default async function Operacao({ params }: PageProps<'/operacoes/[id]'>)
         <CardContent>
           <ol className="space-y-3 text-sm">
             {eventos.map((e) => {
-              const pl = e.payload as { antes?: { vencimento: string; valor: number }; depois?: { vencimento: string; valor: number } };
+              const pl = e.payload as {
+                antes?: { vencimento: string; valor: number };
+                depois?: { vencimento: string; valor: number };
+                pagamento?: { valor: number; juros: number; principal: number };
+                nova?: { vencimento: string; valor: number };
+              };
               return (
                 <li key={e.id} className="border-l-2 pl-3">
                   <div className="font-medium">{ACOES[e.acao] ?? e.acao}</div>
@@ -152,6 +158,13 @@ export default async function Operacao({ params }: PageProps<'/operacoes/[id]'>)
                     <div className="text-xs">
                       {fmt.data(pl.antes.vencimento)} · {fmt.dinheiro(pl.antes.valor)} → {fmt.data(pl.depois.vencimento)} ·{' '}
                       {fmt.dinheiro(pl.depois.valor)}
+                    </div>
+                  )}
+                  {e.acao === 'renovar' && pl.pagamento && pl.nova && (
+                    <div className="text-xs">
+                      Pagou {fmt.dinheiro(pl.pagamento.valor)} (juros {fmt.dinheiro(pl.pagamento.juros)}
+                      {pl.pagamento.principal ? `, amortizou ${fmt.dinheiro(pl.pagamento.principal)}` : ''}) → próximo vencimento{' '}
+                      {fmt.data(pl.nova.vencimento)} · {fmt.dinheiro(pl.nova.valor)}
                     </div>
                   )}
                   {e.mensagem_telegram && <blockquote className="text-muted-foreground mt-1 text-xs italic">“{e.mensagem_telegram}”</blockquote>}

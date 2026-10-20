@@ -8,7 +8,9 @@ import {
   estrategiaPorNome,
   gerarParcelas,
   renegociarParcela,
+  renovarPagandoJuros,
   saldoParcela,
+  vencimentoRenovacao,
   type Alocacao,
   type Centavos,
   type DataISO,
@@ -17,6 +19,7 @@ import {
   type ParcelaPlano,
   type Periodicidade,
   type ResultadoRenegociacao,
+  type ResultadoRenovacao,
   type StatusOperacao,
   type StatusParcela,
 } from '@cobra/core';
@@ -381,4 +384,89 @@ export async function atualizarStatus(repo: Repositorio): Promise<number> {
   }
   if (parcelas.length === 0 && operacoes.length === 0) return 0;
   return ok(await repo.db.rpc('rpc_atualizar_status', { p: { parcelas, operacoes } }));
+}
+
+// ───────────────────────── renovação (pagou só os juros) ─────────────────────────
+
+export interface PlanoRenovacao {
+  operacaoId: string;
+  clienteId: string;
+  clienteNome: string;
+  parcelaId: string;
+  numero: number;
+  vencimentoAtual: DataISO;
+  valorPagoAnterior: Centavos;
+  data: DataISO;
+  forma: string | null;
+  resultado: ResultadoRenovacao;
+  indicadores: IndicadoresOperacao;
+  /** Quantas renovações/renegociações o contrato terá após esta. */
+  renovacoes: number;
+}
+
+/** Contrato com UMA parcela em aberto: renova pagando (ao menos) os juros dela. */
+export async function planejarRenovacao(
+  repo: Repositorio,
+  e: { operacaoId: string; valor: Centavos; data?: DataISO; forma?: string | null },
+): Promise<PlanoRenovacao> {
+  const hoje = await repo.hoje();
+  const c = await repo.carregarCarteira({ operacaoId: e.operacaoId });
+  const op = c.operacoes[0];
+  if (!op || !['ativa', 'atrasada', 'renegociada'].includes(op.status)) {
+    throw new ErroRegra('operacao_fechada', 'Este contrato não está em aberto');
+  }
+  const estados = c.parcelas.map(paraParcela);
+  const abertas = estados.filter((p) => saldoParcela(p).total > 0);
+  if (abertas.length !== 1) {
+    throw new ErroRegra('renovacao_parcelado', 'A renovação vale para contrato com uma parcela em aberto');
+  }
+  const atual = abertas[0]!;
+  const primeiro = [...estados].sort((a, b) => a.numero - b.numero)[0]!;
+  const resultado = renovarPagandoJuros({
+    parcela: atual,
+    valorPago: e.valor,
+    novoVencimento: vencimentoRenovacao(atual.vencimento, op.data_emprestimo, primeiro.vencimento),
+    numeroNova: Math.max(...estados.map((p) => p.numero)) + 1,
+  });
+  const depois = [
+    ...estados
+      .filter((p) => p.status !== 'cancelada')
+      .map((p) => (p.id === atual.id ? { vencimento: p.vencimento, valor: resultado.parcelaFechada.valor } : { vencimento: p.vencimento, valor: p.valor })),
+    { vencimento: resultado.novaParcela.vencimento, valor: resultado.novaParcela.valor },
+  ];
+  return {
+    operacaoId: op.id,
+    clienteId: op.cliente_id,
+    clienteNome: c.clientes.get(op.cliente_id)?.nome ?? '',
+    parcelaId: atual.id,
+    numero: atual.numero,
+    vencimentoAtual: atual.vencimento,
+    valorPagoAnterior: atual.valorPago,
+    data: e.data ?? hoje,
+    forma: e.forma ?? null,
+    resultado,
+    indicadores: calcularIndicadores({ dataEmprestimo: op.data_emprestimo, principal: op.valor_principal, parcelas: depois }),
+    renovacoes: op.renegociacoes + 1,
+  };
+}
+
+export async function executarRenovacao(repo: Repositorio, plano: PlanoRenovacao, meta: MetaLancamento): Promise<string> {
+  const r = plano.resultado;
+  const payload = {
+    parcela_id: plano.parcelaId,
+    valor_pago_anterior: plano.valorPagoAnterior,
+    pagamento: { valor: r.pagamento.valor, principal: r.pagamento.principal, juros: r.pagamento.juros, data: plano.data, forma: plano.forma },
+    fechada: { valor: r.parcelaFechada.valor, valor_principal: r.parcelaFechada.valorPrincipal, valor_juros: r.parcelaFechada.valorJuros },
+    nova: {
+      numero: r.novaParcela.numero,
+      vencimento: r.novaParcela.vencimento,
+      valor: r.novaParcela.valor,
+      valor_principal: r.novaParcela.valorPrincipal,
+      valor_juros: r.novaParcela.valorJuros,
+    },
+    operacao: { taxa_periodo: plano.indicadores.taxaPeriodo, taxa_efetiva_mensal: plano.indicadores.taxaEfetivaMensal },
+    origem: meta.origem,
+    mensagem_telegram: meta.mensagemTelegram ?? null,
+  };
+  return ok(await repo.db.rpc('rpc_renovar_parcela', { p: payload as unknown as Json }));
 }

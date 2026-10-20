@@ -192,6 +192,9 @@ isOneToOne: false
                            },
 "rpc_renegociar_parcela":
 { Args: { "p": Json }; Returns: undefined
+                           },
+"rpc_renovar_parcela":
+{ Args: { "p": Json }; Returns: string
                            }
           }
           Enums: {

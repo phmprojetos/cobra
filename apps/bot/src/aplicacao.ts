@@ -27,6 +27,9 @@ import {
   planejarOperacao,
   planejarPagamento,
   planejarRenegociacao,
+  planejarRenovacao,
+  executarRenovacao,
+  type PlanoRenovacao,
   type ClienteRow,
   type MetaLancamento,
   type PlanoOperacao,
@@ -71,6 +74,7 @@ type Pendente =
       intencao: Intencao;
       texto: string;
     }
+  | { acao: 'renovacao'; plano: PlanoRenovacao; intencao: null; texto: string }
   | {
       acao: 'editar_cliente';
       clienteId: string;
@@ -144,6 +148,8 @@ interface PagamentoEmAndamento {
   valor?: number | null;
   data?: string | null;
   forma?: string | null;
+  /** "Pagou só os juros": renova o contrato pelo valor dos juros em aberto. */
+  soJuros?: boolean;
   texto: string;
 }
 
@@ -357,7 +363,11 @@ export class Aplicacao {
         case 'po':
           return this.pagamentoContratoEscolhido(userId, id, Number(extra));
         case 'pv':
-          return this.pagamentoValorRapido(userId, id, extra === 'q' ? 'q' : 'p');
+          return this.pagamentoValorRapido(userId, id, extra === 'q' ? 'q' : extra === 'j' ? 'j' : 'p');
+        case 'pr':
+          return this.renovarOuParcial(userId, id, extra === 'r');
+        case 'rj':
+          return this.soJurosDaParcela(userId, id);
         case 'em':
           return this.menuEdicao(id, true);
         case 'ec':
@@ -400,6 +410,7 @@ export class Aplicacao {
           valor: r.dados.valor,
           data: r.dados.data,
           forma: r.dados.forma,
+          ...(r.dados.so_juros ? { soJuros: true } : {}),
           texto,
         });
       case 'editar_cliente': {
@@ -738,6 +749,18 @@ export class Aplicacao {
           `Nova taxa: ${f.pct(pl.indicadores.taxaEfetivaMensal)} a.m.`,
         ].join('\n');
       }
+      case 'renovacao': {
+        const pl = p.plano;
+        const r = pl.resultado;
+        return [
+          '🔁 <b>Renovação (pagou os juros)</b>',
+          `Cliente: <b>${escapar(pl.clienteNome)}</b>`,
+          `Pago: <b>${f.dinheiro(r.pagamento.valor)}</b> em ${f.data(pl.data, ano)} → juros ${f.dinheiro(r.pagamento.juros)}${r.pagamento.principal ? ` · amortiza ${f.dinheiro(r.pagamento.principal)}` : ''}`,
+          `Parcela de ${f.data(pl.vencimentoAtual, ano)} encerrada.`,
+          `Próximo vencimento: <b>${f.data(r.novaParcela.vencimento, ano)}</b> · <b>${f.dinheiro(r.novaParcela.valor)}</b> (principal ${f.dinheiro(r.novaParcela.valorPrincipal)} + juros ${f.dinheiro(r.novaParcela.valorJuros)})`,
+          `Renovação nº ${pl.renovacoes} deste contrato.`,
+        ].join('\n');
+      }
       case 'editar_cliente':
         return [
           `✏️ <b>Editar ${escapar(p.clienteNome)}</b>`,
@@ -780,6 +803,14 @@ export class Aplicacao {
       case 'renegociacao':
         await executarRenegociacao(this.repo, p.plano, meta);
         return [{ texto: `${resumo}\n\n✅ <b>Atualizado</b>`, editarOriginal: true }];
+      case 'renovacao': {
+        await executarRenovacao(this.repo, p.plano, meta);
+        const r = p.plano.resultado;
+        await this.avisarCanal({
+          texto: `🔁 <b>Renovação</b> · <b>${escapar(p.plano.clienteNome)}</b>\nPagou ${f.dinheiro(r.pagamento.valor)} (juros) · próximo vencimento ${f.data(r.novaParcela.vencimento)} · ${f.dinheiro(r.novaParcela.valor)}`,
+        });
+        return [{ texto: `${resumo}\n\n✅ <b>Renovado</b>`, editarOriginal: true }];
+      }
       case 'editar_cliente': {
         const patch =
           p.campo === 'documento'
@@ -963,6 +994,8 @@ export class Aplicacao {
           total: ps.length,
           proxima: prox ?? null,
           saldoProxima: prox ? saldoParcela(prox).total : 0,
+          jurosProxima: prox ? saldoParcela(prox).juros : 0,
+          parcelasAbertas: abertas.length,
           saldo: abertas.reduce((a, p) => a + saldoParcela(p).total, 0),
           atrasado: !!prox && prox.vencimento < hoje,
         };
@@ -1055,13 +1088,46 @@ export class Aplicacao {
   /** Passo 3: valor (se ainda não informado) e passo 4: resumo para confirmar. */
   private async planejarPagamentoContrato(userId: number, operacaoId: string, p: PagamentoEmAndamento): Promise<Resposta[]> {
     const f = await this.fmt();
-    if (p.valor == null) {
+    const contrato = async () => {
       const c = await this.repo.carregarCarteira({ operacaoId });
       const op = c.operacoes[0]!;
-      const k = (await this.contratosAbertos(op.cliente_id)).find((x) => x.op.id === operacaoId);
+      return { c, op, k: (await this.contratosAbertos(op.cliente_id)).find((x) => x.op.id === operacaoId) };
+    };
+    // Renovação: só faz sentido com uma parcela em aberto e juros a pagar.
+    const renovavel = (k: { parcelasAbertas: number; jurosProxima: number; saldoProxima: number }) =>
+      k.parcelasAbertas === 1 && k.jurosProxima > 0 && k.jurosProxima < k.saldoProxima;
+
+    if (p.soJuros) {
+      const { k } = await contrato();
+      if (!k) return [{ texto: 'Este contrato não tem saldo em aberto.' }];
+      if (!renovavel(k)) return [{ texto: '⚠️ Este contrato não pode ser renovado pelos juros (precisa ter uma única parcela em aberto com juros a pagar).' }];
+      return this.planejarRenovacaoContrato(userId, operacaoId, k.jurosProxima, p);
+    }
+    if (p.valor != null) {
+      const { k } = await contrato();
+      const v = centavos(p.valor);
+      // Valor entre os juros e o total da parcela: renovar ou pagamento parcial?
+      if (k && renovavel(k) && v >= k.jurosProxima && v < k.saldoProxima) {
+        const sid = await this.repo.criarSessao(userId, 'escolha_renovacao', { ...p, operacaoId });
+        const amortiza = v - k.jurosProxima;
+        return [
+          {
+            texto: `💰 ${f.dinheiro(v)} cobre os juros (${f.dinheiro(k.jurosProxima)})${amortiza ? ` e amortiza ${f.dinheiro(amortiza)}` : ''}, mas não quita a parcela (${f.dinheiro(k.saldoProxima)}).\nComo registrar?`,
+            teclado: [
+              [{ texto: '🔁 Renovar para o próximo mês', dados: `pr:${sid}:r` }],
+              [{ texto: 'Pagamento parcial (mesmo vencimento)', dados: `pr:${sid}:p` }],
+              [{ texto: '❌ Cancelar', dados: `x:${sid}` }],
+            ],
+          },
+        ];
+      }
+    }
+    if (p.valor == null) {
+      const { c, op, k } = await contrato();
       if (!k) return [{ texto: 'Este contrato não tem saldo em aberto.' }];
       const sid = await this.repo.criarSessao(userId, 'aguardando_valor_pagamento', { ...p, operacaoId });
       const botoes: Botao[][] = [[{ texto: `Parcela atual · ${f.dinheiro(k.saldoProxima)}`, dados: `pv:${sid}:p` }]];
+      if (renovavel(k)) botoes.push([{ texto: `🔁 Só os juros · ${f.dinheiro(k.jurosProxima)} (renova)`, dados: `pv:${sid}:j` }]);
       if (k.saldo !== k.saldoProxima) botoes.push([{ texto: `Quitar contrato · ${f.dinheiro(k.saldo)}`, dados: `pv:${sid}:q` }]);
       botoes.push([{ texto: '❌ Cancelar', dados: `x:${sid}` }]);
       return [
@@ -1083,7 +1149,32 @@ export class Aplicacao {
     return this.pedirConfirmacao(userId, { acao: 'pagamento', plano, intencao: null, texto: p.texto });
   }
 
-  private async pagamentoValorRapido(userId: number, sid: string, tipo: 'p' | 'q'): Promise<Resposta[]> {
+  private async planejarRenovacaoContrato(userId: number, operacaoId: string, valor: Centavos, p: PagamentoEmAndamento): Promise<Resposta[]> {
+    const plano = await planejarRenovacao(this.repo, { operacaoId, valor, ...(p.data ? { data: p.data } : {}), forma: p.forma ?? null });
+    return this.pedirConfirmacao(userId, { acao: 'renovacao', plano, intencao: null, texto: p.texto });
+  }
+
+  private async renovarOuParcial(userId: number, sid: string, renovar: boolean): Promise<Resposta[]> {
+    const s = await this.repo.obterSessao(sid);
+    if (!s || s.estado !== 'escolha_renovacao' || !(await this.repo.consumirSessao(sid))) {
+      return [{ texto: '⌛ Esta pergunta expirou. Envie /pagar de novo.', editarOriginal: true }];
+    }
+    const p = s.payload as PagamentoEmAndamento & { operacaoId: string; valor: number };
+    if (renovar) return this.planejarRenovacaoContrato(userId, p.operacaoId, centavos(p.valor), p);
+    const f = await this.fmt();
+    const plano = await planejarPagamento(this.repo, { operacaoId: p.operacaoId, valor: centavos(p.valor), ...(p.data ? { data: p.data } : {}), forma: p.forma ?? null });
+    if (plano.excedente > 0) return [{ texto: `⚠️ ${f.dinheiro(plano.valor)} é mais que o saldo em aberto deste contrato.` }];
+    return this.pedirConfirmacao(userId, { acao: 'pagamento', plano, intencao: null, texto: p.texto });
+  }
+
+  /** Botão "🔁 Pagou só os juros" dos alertas/ficha da parcela. */
+  private async soJurosDaParcela(userId: number, parcelaId: string): Promise<Resposta[]> {
+    const { data } = await this.repo.db.from('parcelas').select('operacao_id').eq('id', parcelaId).maybeSingle();
+    if (!data) return [{ texto: 'Parcela não encontrada.' }];
+    return this.planejarPagamentoContrato(userId, data.operacao_id, { soJuros: true, texto: 'Pagou só os juros (botão)' });
+  }
+
+  private async pagamentoValorRapido(userId: number, sid: string, tipo: 'p' | 'q' | 'j'): Promise<Resposta[]> {
     const s = await this.repo.obterSessao(sid);
     if (!s || s.estado !== 'aguardando_valor_pagamento' || !(await this.repo.consumirSessao(sid))) {
       return [{ texto: '⌛ Esta pergunta expirou. Envie /pagar de novo.', editarOriginal: true }];
@@ -1092,6 +1183,7 @@ export class Aplicacao {
     const c = await this.repo.carregarCarteira({ operacaoId: p.operacaoId });
     const k = (await this.contratosAbertos(c.operacoes[0]!.cliente_id)).find((x) => x.op.id === p.operacaoId);
     if (!k) return [{ texto: 'Este contrato não tem saldo em aberto.' }];
+    if (tipo === 'j') return this.planejarRenovacaoContrato(userId, p.operacaoId, k.jurosProxima, p);
     const valor = (tipo === 'q' ? k.saldo : k.saldoProxima) / 100;
     return this.planejarPagamentoContrato(userId, p.operacaoId, { ...p, valor });
   }

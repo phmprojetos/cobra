@@ -22,6 +22,7 @@ export function botoesAlertaParcela(parcelaId: string): Botao[][] {
       { texto: '💰 Recebido total', dados: `rt:${parcelaId}` },
       { texto: '🪙 Recebido parcial', dados: `rp:${parcelaId}` },
     ],
+    [{ texto: '🔁 Pagou só os juros (renova)', dados: `rj:${parcelaId}` }],
     [
       { texto: '📅 +1', dados: `ad:${parcelaId}:1` },
       { texto: '+3', dados: `ad:${parcelaId}:3` },

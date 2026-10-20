@@ -265,6 +265,8 @@ describe('documento repetido com outro nome e /editar', () => {
   });
 });
 
+let montarPagamento: () => Promise<{ repo: RepoMemoria; app: Aplicacao }>;
+
 describe('pagamento guiado: quem paga → qual contrato → quanto', () => {
   const agora = '2026-10-20T00:00:00Z';
   const op = (id: string, cliente: string, data: string, principal: number, total: number): OperacaoRow => ({
@@ -277,10 +279,17 @@ describe('pagamento guiado: quem paga → qual contrato → quanto', () => {
     valor_pago: 0, principal_pago: 0, juros_pago: 0, status: 'aberta', cancelado_em: null, created_at: agora, updated_at: agora,
   });
 
+  montarPagamento = montar;
   async function montar() {
     const repo = new RepoMemoria();
     const pedro = await repo.criarCliente({ nome: 'Pedro', documento: { tipo: 'cpf', numero: '11219819417' } });
     const ana = await repo.criarCliente({ nome: 'Ana Paula', documento: { tipo: 'cpf', numero: '52998224725' } });
+    // Joao: pegou 100 com 30 de juros em 20/10, vence 20/11 (o caso da regra de renovação)
+    const joao = await repo.criarCliente({ nome: 'Joao', documento: { tipo: 'cpf', numero: '68826079404' } });
+    const o4 = op('o4', joao.id, '2026-10-20', 10000, 13000);
+    o4.tipo = 'unica';
+    repo.operacoes.push(o4);
+    repo.parcelas.push(par('p5', 'o4', 1, '2026-11-20', 13000, 10000));
     repo.operacoes.push(op('o1', pedro.id, '2026-09-01', 100000, 130000), op('o2', pedro.id, '2026-10-10', 50000, 60000), op('o3', ana.id, '2026-10-01', 80000, 100000));
     repo.parcelas.push(
       par('p1', 'o1', 1, '2026-10-01', 65000, 50000), // atrasada
@@ -288,7 +297,10 @@ describe('pagamento guiado: quem paga → qual contrato → quanto', () => {
       par('p3', 'o2', 1, '2026-11-10', 60000, 50000),
       par('p4', 'o3', 1, '2026-11-20', 100000, 80000),
     );
-    const ia = new IAFake({ 'ana pagou 300': { tipo: 'registrar_pagamento', dados: { cliente: 'Ana Paula', valor: 300, data: null, forma: 'pix' } } });
+    const ia = new IAFake({
+      'ana pagou 300': { tipo: 'registrar_pagamento', dados: { cliente: 'Ana Paula', valor: 300, data: null, forma: 'pix' } },
+      'joao pagou só os juros': { tipo: 'registrar_pagamento', dados: { cliente: 'Joao', valor: null, data: null, forma: null, so_juros: true } },
+    });
     return { repo, app: new Aplicacao(repo as unknown as Repositorio, ia, { info: () => {}, error: (e) => console.error(e) }) };
   }
 
@@ -326,13 +338,18 @@ describe('pagamento guiado: quem paga → qual contrato → quanto', () => {
     expect(textos(r1)).toContain('tem 2 contratos');
     const r2 = await app.callback(U, r1[0]!.teclado![1]![0]!.dados); // contrato 2 (o2)
     const r3 = await app.mensagem(U, '200');
-    expect(textos(r3)).toContain('Valor: <b>R$ 200,00</b>');
+    // 200 cobre os juros (100) sem quitar (600): pergunta; parcial registra o pagamento
+    expect(textos(r3)).toContain('Como registrar?');
+    const r4 = await app.callback(U, botao(r3, 'pr:')!.dados.replace(/:r$/, ':p'));
+    expect(textos(r4)).toContain('Valor: <b>R$ 200,00</b>');
     expect(r2).toBeDefined();
   });
 
-  it('frase com cliente de um contrato só vai direto ao resumo; valor acima do contrato é recusado', async () => {
+  it('frase com cliente de um contrato só: cobre os juros sem quitar → pergunta renovar ou parcial', async () => {
     const { app } = await montar();
-    const r = await app.mensagem(U, 'ana pagou 300');
+    const r0 = await app.mensagem(U, 'ana pagou 300');
+    expect(textos(r0)).toContain('cobre os juros (R$ 200,00) e amortiza R$ 100,00');
+    const r = await app.callback(U, botao(r0, 'pr:')!.dados.replace(/:r$/, ':p')); // parcial
     expect(textos(r)).toContain('Pagamento recebido');
     expect(textos(r)).toContain('Ana Paula');
     expect(textos(await app.comando(U, 'pagar', 'Ana 5000'))).toContain('mais que o saldo em aberto deste contrato');
@@ -343,5 +360,45 @@ describe('pagamento guiado: quem paga → qual contrato → quanto', () => {
     expect(textos(await app.comando(U, 'pagar', 'Pedro'))).toContain('tem 2 contratos');
     repo.parcelas.length = 0;
     expect(textos(await app.comando(U, 'pagar', ''))).toContain('Ninguém está devendo');
+  });
+});
+
+describe('renovação: pagou só os juros', () => {
+  // Reaproveita o cenário do pagamento guiado (Joao: 100 + 30, vence 20/11)
+  it('botão "Só os juros" renova: próximo vencimento 20/12 com 130 de novo', async () => {
+    const { app } = await montarPagamento();
+    const r1 = await app.comando(U, 'pagar', 'Joao');
+    const j = r1.flatMap((x) => x.teclado ?? []).flat().find((b) => b.dados.endsWith(':j'))!;
+    expect(j.texto).toBe('🔁 Só os juros · R$ 30,00 (renova)');
+    const r2 = await app.callback(U, j.dados);
+    const t = textos(r2);
+    expect(t).toContain('Renovação (pagou os juros)');
+    expect(t).toContain('Pago: <b>R$ 30,00</b>');
+    expect(t).toContain('juros R$ 30,00');
+    expect(t).toContain('Parcela de 20/11');
+    expect(t).toContain('Próximo vencimento: <b>20/12 (dom)</b> · <b>R$ 130,00</b> (principal R$ 100,00 + juros R$ 30,00)');
+    expect(t).toContain('Renovação nº 1');
+    expect(botao(r2, 'ok:')).toBeDefined();
+  });
+
+  it('pagou 50: renovar amortiza 20 → 104 no mês seguinte; parcial mantém o vencimento', async () => {
+    const { app } = await montarPagamento();
+    const r1 = await app.comando(U, 'pagar', 'Joao 50');
+    expect(textos(r1)).toContain('cobre os juros (R$ 30,00) e amortiza R$ 20,00');
+    const r2 = await app.callback(U, botao(r1, 'pr:')!.dados); // renovar
+    expect(textos(r2)).toContain('amortiza R$ 20,00');
+    expect(textos(r2)).toContain('<b>R$ 104,00</b> (principal R$ 80,00 + juros R$ 24,00)');
+  });
+
+  it('"joao pagou só os juros" (IA) vai direto para a renovação', async () => {
+    const { app } = await montarPagamento();
+    expect(textos(await app.mensagem(U, 'joao pagou só os juros'))).toContain('Renovação (pagou os juros)');
+  });
+
+  it('contrato parcelado não oferece renovação', async () => {
+    const { app } = await montarPagamento();
+    const r = await app.comando(U, 'pagar', 'Pedro');
+    const r2 = await app.callback(U, botao(r, 'po:')!.dados);
+    expect(r2.flatMap((x) => x.teclado ?? []).flat().some((b) => b.dados.endsWith(':j'))).toBe(false);
   });
 });

@@ -66,8 +66,9 @@ export const FERRAMENTAS = [
         valor: nulo(numero, 'Valor pago, em reais.'),
         data: nulo(data, 'Data (YYYY-MM-DD) do pagamento, se diferente de hoje.'),
         forma: nulo(texto, 'pix, dinheiro, transferência…'),
+        so_juros: { type: 'boolean', description: 'true se o usuário disse que pagou SÓ os juros ("pagou só os juros", "pagou o juros", "renovou").' },
       },
-      required: ['cliente', 'valor', 'data', 'forma'],
+      required: ['cliente', 'valor', 'data', 'forma', 'so_juros'],
       additionalProperties: false,
     },
   },
@@ -180,6 +181,7 @@ export const SCHEMAS = {
     valor: reais.positive().nullable(),
     data: dataISO.nullable(),
     forma: z.string().nullable(),
+    so_juros: z.boolean().optional(),
   }),
   prorrogar: z.object({
     cliente: z.string().min(1).nullable(),
