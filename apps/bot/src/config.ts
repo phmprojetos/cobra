@@ -3,6 +3,8 @@ import { z } from 'zod';
 const esquema = z.object({
   TELEGRAM_BOT_TOKEN: z.string().min(10),
   TELEGRAM_WEBHOOK_SECRET: z.string().default(''),
+  /** No modo webhook, registrado no Telegram ao iniciar (ex.: https://dominio/telegram). */
+  TELEGRAM_WEBHOOK_URL: z.string().url().optional(),
   ANTHROPIC_API_KEY: z.string().default(''),
   ANTHROPIC_MODEL: z.string().default('claude-haiku-5-5'),
   SUPABASE_URL: z.string().url(),

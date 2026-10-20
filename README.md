@@ -54,7 +54,7 @@ cp .env.example .env   # preencha os valores
 | `SUPABASE_DB_URL` | Connect → *Session pooler* (com a senha do banco). Usado por `db:push` e `db:types`. |
 | `SUPABASE_TEST_*` | Projeto Supabase separado para `pnpm test:db` |
 | `MOEDA`, `LOCALE`, `TIMEZONE` | Padrões. A tabela `configuracoes`, editável no painel, tem precedência. |
-| `BOT_DOMINIO` | Domínio do bot para o HTTPS automático do Caddy (só no docker-compose) |
+| `DOMINIO` | Domínio do painel e do bot (HTTPS automático do Caddy, só no docker-compose) |
 
 ### 2. Banco (Supabase na plataforma)
 
@@ -107,29 +107,68 @@ As frases de exemplo do produto estão em `apps/bot/test/fixtures.ts`. Elas serv
 
 ## Deploy
 
-### Painel na Vercel
+Tudo numa VPS com Docker: **painel + bot + Caddy** (HTTPS automático) num domínio só.
 
-1. Importe o repositório e defina **Root Directory = `apps/web`**. A Vercel detecta o pnpm workspace.
-2. Variáveis: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` e `NEXT_PUBLIC_SITE_URL` (URL final do painel).
-3. Se o build reclamar da versão do pnpm, adicione `ENABLE_EXPERIMENTAL_COREPACK=1` às variáveis.
-4. Adicione `https://<painel>/auth/callback` nas Redirect URLs do Supabase.
+| Endereço | Serviço |
+|---|---|
+| `https://DOMINIO/` | painel |
+| `https://DOMINIO/telegram` | webhook do bot (registrado no Telegram automaticamente ao subir) |
 
-### Bot na VPS (Docker, só em produção)
+O agendador de alertas roda dentro do bot (`NOTIFICACOES_CRON=true`). `/health` e `/jobs` não ficam expostos.
 
-Na VPS, com Docker e um domínio apontando para ela:
+### 1. Preparar a VPS (uma vez)
 
 ```bash
-git clone <repo> cobra && cd cobra
-cp .env.example .env    # BOT_MODO=webhook, BOT_DOMINIO, TELEGRAM_WEBHOOK_URL=https://$BOT_DOMINIO/telegram
+curl -fsSL https://get.docker.com | sh     # Docker + compose
+ufw allow 22 && ufw allow 80 && ufw allow 443 && ufw enable   # se usar ufw
+```
+
+O domínio precisa apontar para o IP da VPS (DuckDNS: `cobraphm.duckdns.org → IP`).
+
+### 2. Enviar o código
+
+Sem repositório remoto, copie da sua máquina (sem `node_modules`/builds):
+
+```bash
+rsync -az --exclude node_modules --exclude .next --exclude .next-build --exclude dist --exclude coverage \
+  ./ root@IP_DA_VPS:/opt/cobra/
+```
+
+### 3. `.env` de produção (em `/opt/cobra/.env`)
+
+Parta do `.env` local e ajuste:
+
+```bash
+DOMINIO=cobraphm.duckdns.org
+NEXT_PUBLIC_SITE_URL=https://cobraphm.duckdns.org
+TELEGRAM_WEBHOOK_SECRET=<openssl rand -hex 32>
+NOTIFICACOES_CRON=true
+```
+
+(`BOT_MODO`, `PORT` e `TELEGRAM_WEBHOOK_URL` são definidos pelo `docker-compose.yml`.)
+
+### 4. Subir
+
+```bash
+cd /opt/cobra
 docker compose up -d --build
+docker compose logs -f bot     # deve mostrar "webhook registrado"
 ```
 
-O compose sobe o bot e o Caddy, que emite o certificado HTTPS automaticamente. Em seguida, registre o webhook (de qualquer máquina com o `.env`):
+### 5. Supabase e Telegram
+
+- **Authentication → URL Configuration**: *Site URL* = `https://DOMINIO`; em *Redirect URLs*, `https://DOMINIO/auth/callback`.
+- **Pare o bot local** (`pnpm dev`): em modo polling ele apaga o webhook de produção ao iniciar.
+- Conferir o webhook: `pnpm --filter @cobra/bot webhook:info`.
+
+### Atualizar
 
 ```bash
-pnpm --filter @cobra/bot webhook:set    # setWebhook com secret_token
-pnpm --filter @cobra/bot webhook:info   # confere status e últimos erros
+rsync ... (mesmo comando do passo 2)
+ssh root@IP_DA_VPS 'cd /opt/cobra && docker compose up -d --build'
 ```
+
+Migrations continuam sendo aplicadas da sua máquina: `pnpm db:push`.
 
 Endpoints do bot:
 

@@ -1,6 +1,22 @@
-# Produção (VPS): bot em modo webhook + Caddy com HTTPS automático.
-# Uso: defina BOT_DOMINIO no .env e rode `docker compose up -d --build`.
+# Produção (VPS): painel + bot (webhook) + Caddy com HTTPS automático, tudo num domínio só:
+#   https://DOMINIO/          → painel
+#   https://DOMINIO/telegram  → webhook do bot
+# Uso: preencha o .env (veja "Deploy" no README) e rode `docker compose up -d --build`.
 services:
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:?defina no .env}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:?defina no .env}
+        NEXT_PUBLIC_SITE_URL: https://${DOMINIO:?defina DOMINIO no .env}
+    env_file: .env
+    environment:
+      NEXT_PUBLIC_SITE_URL: https://${DOMINIO}
+      PORT: 3000
+    restart: unless-stopped
+
   bot:
     build:
       context: .
@@ -9,6 +25,8 @@ services:
     environment:
       BOT_MODO: webhook
       PORT: 8080
+      # Registrado no Telegram automaticamente quando o bot sobe.
+      TELEGRAM_WEBHOOK_URL: https://${DOMINIO}/telegram
     restart: unless-stopped
 
   caddy:
@@ -17,11 +35,12 @@ services:
       - '80:80'
       - '443:443'
     environment:
-      BOT_DOMINIO: ${BOT_DOMINIO:?defina BOT_DOMINIO no .env}
+      DOMINIO: ${DOMINIO}
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
     depends_on:
+      - web
       - bot
     restart: unless-stopped
 

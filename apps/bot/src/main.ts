@@ -166,6 +166,13 @@ servidor.listen(config.PORT, () => log.info({ porta: config.PORT, modo: config.B
 await bot.init();
 await registrarComandos(bot).catch((err) => log.error({ err }, 'setMyCommands falhou'));
 
+if (config.BOT_MODO === 'webhook' && config.TELEGRAM_WEBHOOK_URL) {
+  // Registra (ou atualiza) o webhook com o secret validado em /telegram.
+  await bot.api
+    .setWebhook(config.TELEGRAM_WEBHOOK_URL, { secret_token: config.TELEGRAM_WEBHOOK_SECRET })
+    .then(() => log.info({ url: config.TELEGRAM_WEBHOOK_URL }, 'webhook registrado'))
+    .catch((err) => log.error({ err }, 'setWebhook falhou'));
+}
 if (config.BOT_MODO === 'polling') {
   // Polling exige que não exista webhook registrado.
   await bot.api.deleteWebhook();

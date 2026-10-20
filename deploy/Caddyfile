@@ -1,4 +1,13 @@
-{$BOT_DOMINIO} {
+# HTTPS automático (Let's Encrypt) para o domínio do .env (DOMINIO).
+{$DOMINIO} {
 	encode gzip
-	reverse_proxy bot:8080
+
+	# Só o webhook do Telegram chega ao bot; /health e /jobs ficam internos.
+	handle /telegram {
+		reverse_proxy bot:8080
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
 }
