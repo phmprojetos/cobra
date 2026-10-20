@@ -125,6 +125,26 @@ export const FERRAMENTAS = [
     },
   },
   {
+    name: 'editar_cliente',
+    description:
+      'Corrigir/alterar o cadastro de um cliente existente: nome, apelidos, telefone, documento ou observações. Ex.: "renomeia o joao para Vânia", "corrige o CPF da Ana", "editar o Pedro".',
+    strict: true,
+    input_schema: {
+      type: 'object',
+      properties: {
+        cliente: { type: 'string', description: 'Cliente a editar: nome atual, apelido ou documento, como na lista.' },
+        campo: {
+          type: 'string',
+          enum: ['nome', 'apelidos', 'telefone', 'documento', 'observacoes', 'indefinido'],
+          description: 'O que mudar. "indefinido" se o usuário só pediu para editar sem dizer o quê.',
+        },
+        valor: { type: ['string', 'null'], description: 'Novo valor, como dito. null se não foi dito.' },
+      },
+      required: ['cliente', 'campo', 'valor'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'pedir_esclarecimento',
     description:
       'Use SÓ quando não der para saber o que o usuário quer (saudação, assunto fora de empréstimos, frase sem sentido). Se a intenção for clara e só faltarem dados, use a ferramenta da intenção com null nos campos que faltam.',
@@ -178,6 +198,11 @@ export const SCHEMAS = {
     telefone: z.string().nullable(),
     documento: z.string().nullable(),
   }),
+  editar_cliente: z.object({
+    cliente: z.string().min(1),
+    campo: z.enum(['nome', 'apelidos', 'telefone', 'documento', 'observacoes', 'indefinido']),
+    valor: z.string().nullable(),
+  }),
   pedir_esclarecimento: z.object({ pergunta: z.string().min(1) }),
 } as const;
 
@@ -208,4 +233,5 @@ export type Intencao =
   | { tipo: 'prorrogar'; dados: Omit<Dados<'prorrogar'>, 'cliente'> & { cliente: string } }
   | { tipo: 'consultar'; dados: Dados<'consultar'> }
   | { tipo: 'criar_cliente'; dados: Dados<'criar_cliente'> }
+  | { tipo: 'editar_cliente'; dados: Dados<'editar_cliente'> }
   | { tipo: 'pedir_esclarecimento'; dados: Dados<'pedir_esclarecimento'> };

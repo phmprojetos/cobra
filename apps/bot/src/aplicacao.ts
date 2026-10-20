@@ -1,6 +1,7 @@
 import {
   AJUDA_DOCUMENTO,
   diferencaDias,
+  normalizarNome,
   ErroRegra,
   formatarDocumento,
   parseDocumento,
@@ -69,7 +70,28 @@ type Pendente =
       dados: { nome: string; apelidos: string[]; telefone: string | null; documento: Documento };
       intencao: Intencao;
       texto: string;
+    }
+  | {
+      acao: 'editar_cliente';
+      clienteId: string;
+      clienteNome: string;
+      campo: CampoCliente;
+      antes: string;
+      depois: string;
+      /** Valor já normalizado para gravar. */
+      valor: string | string[] | Documento | null;
+      intencao: null;
+      texto: string;
     };
+
+type CampoCliente = 'nome' | 'apelidos' | 'telefone' | 'documento' | 'observacoes';
+const CAMPOS_CLIENTE: Record<CampoCliente, string> = {
+  nome: 'Nome',
+  apelidos: 'Apelidos',
+  telefone: 'Telefone',
+  documento: 'Documento',
+  observacoes: 'Observações',
+};
 
 interface EscolhaCliente {
   intencao: Intencao;
@@ -110,6 +132,8 @@ const ESTADOS_TEXTO = [
   'aguardando_pagar',
   'aguardando_documento',
   'rascunho',
+  'aguardando_cliente_editar',
+  'aguardando_valor_edicao',
 ];
 
 const centavos = (reais: number): Centavos => Math.round(reais * 100);
@@ -280,6 +304,8 @@ export class Aplicacao {
           return [{ texto: textoAtrasados(await this.repo.carregarCarteira(), hoje, f) }];
         case 'resumo':
           return [{ texto: textoResumoCarteira(await this.repo.carregarCarteira(), hoje, f) }];
+        case 'editar':
+          return this.iniciarEdicao(userId, args.trim() || null, null, null);
         case 'clientes':
           return this.processar(userId, { tipo: 'consultar', dados: { tipo: 'listar_clientes', cliente: args.trim() || null, data_inicio: null, data_fim: null } }, `/clientes ${args}`);
         case 'cliente':
@@ -309,6 +335,12 @@ export class Aplicacao {
           return this.confirmarMesmoCliente(userId, id);
         case 'uc':
           return this.usarUltimoCliente(userId, id);
+        case 'em':
+          return this.menuEdicao(id, true);
+        case 'ec':
+          return this.pedirValorEdicao(userId, id, extra as CampoCliente);
+        case 'ee':
+          return this.escolherClienteEdicao(userId, id, Number(extra));
         case 'pa':
           return this.escolherParcela(userId, id, Number(extra));
         // Botões dos alertas de parcela
@@ -339,6 +371,10 @@ export class Aplicacao {
         return [{ texto: escapar(r.dados.pergunta) }];
       case 'consultar':
         return this.consultar(r);
+      case 'editar_cliente': {
+        const campo = r.dados.campo === 'indefinido' ? null : r.dados.campo;
+        return this.iniciarEdicao(userId, r.dados.cliente, campo, r.dados.valor);
+      }
       default:
         return this.avancarRascunho(userId, r, texto);
     }
@@ -444,10 +480,7 @@ export class Aplicacao {
         const doc = r.dados.documento ? parseDocumento(r.dados.documento) : null;
         if (doc && !('erro' in doc)) {
           const existente = await this.repo.clientePorDocumento(doc);
-          if (existente) {
-            await this.repo.adicionarApelido(existente.id, r.dados.cliente);
-            return this.continuarComCliente(userId, r, texto, existente);
-          }
+          if (existente) return this.continuarComCliente(userId, r, texto, existente);
           const res = resolverCliente(r.dados.cliente, await this.repo.listarClientes());
           if (res.tipo !== 'unico') return this.cadastrarComDocumento(userId, { intencao: r, texto, nome: r.dados.cliente }, doc);
         }
@@ -518,9 +551,12 @@ export class Aplicacao {
       const sid = await this.repo.criarSessao(userId, 'confirmar_documento', { ...c, existenteId: existente.id } satisfies CadastroPendente);
       return [
         {
-          texto: `🔎 ${formatarDocumento(doc.tipo, doc.numero)} já é de <b>${escapar(existente.nome)}</b>. É a mesma pessoa?`,
+          texto: `🔎 ${formatarDocumento(doc.tipo, doc.numero)} já é de <b>${escapar(existente.nome)}</b>.${
+            normalizarNome(existente.nome) !== normalizarNome(c.nome) ? `\nSe o nome certo é "${escapar(c.nome)}", corrija em ✏️ Editar cadastro.` : ''
+          }`,
           teclado: [
-            [{ texto: `✅ Sim, usar ${existente.nome}`, dados: `cd:${sid}` }],
+            ...(c.intencao.tipo === 'criar_cliente' ? [] : [[{ texto: `✅ Usar ${existente.nome}`, dados: `cd:${sid}` }]]),
+            [{ texto: '✏️ Editar cadastro', dados: `em:${existente.id}` }],
             [{ texto: '❌ Cancelar', dados: `x:${sid}` }],
           ],
         },
@@ -548,13 +584,12 @@ export class Aplicacao {
     const p = sessao.payload as CadastroPendente;
     const cliente = p.existenteId ? await this.repo.cliente(p.existenteId) : null;
     if (!cliente) return [];
-    // O nome usado no lançamento vira apelido: da próxima vez o bot reconhece direto.
-    await this.repo.adicionarApelido(cliente.id, p.nome);
+    // Nada é alterado no cadastro aqui: nome errado se corrige pelo ✏️ Editar cadastro.
     if (p.intencao.tipo === 'criar_cliente') {
-      return [{ texto: `👤 <b>${escapar(cliente.nome)}</b> já está cadastrado. Guardei "${escapar(p.nome)}" como apelido.`, editarOriginal: true }];
+      return [{ texto: `👤 <b>${escapar(cliente.nome)}</b> já está cadastrado.`, editarOriginal: true }];
     }
     const r = await this.continuarComCliente(userId, p.intencao, p.texto, cliente);
-    return [{ texto: `👤 ${escapar(cliente.nome)} (apelido "${escapar(p.nome)}" guardado)`, editarOriginal: true }, ...r];
+    return [{ texto: `👤 ${escapar(cliente.nome)}`, editarOriginal: true }, ...r];
   }
 
   private async continuarComCliente(userId: number, intencao: Intencao, texto: string, cliente: ClienteRow | { id: string; nome: string }): Promise<Resposta[]> {
@@ -682,6 +717,11 @@ export class Aplicacao {
           `Nova taxa: ${f.pct(pl.indicadores.taxaEfetivaMensal)} a.m.`,
         ].join('\n');
       }
+      case 'editar_cliente':
+        return [
+          `✏️ <b>Editar ${escapar(p.clienteNome)}</b>`,
+          `${CAMPOS_CLIENTE[p.campo]}: ${escapar(p.antes || '—')} → <b>${escapar(p.depois || '—')}</b>`,
+        ].join('\n');
       case 'cliente':
         return [
           '👤 <b>Novo cliente</b>',
@@ -719,6 +759,18 @@ export class Aplicacao {
       case 'renegociacao':
         await executarRenegociacao(this.repo, p.plano, meta);
         return [{ texto: `${resumo}\n\n✅ <b>Atualizado</b>`, editarOriginal: true }];
+      case 'editar_cliente': {
+        const patch =
+          p.campo === 'documento'
+            ? { documento: p.valor as Documento }
+            : p.campo === 'apelidos'
+              ? { apelidos: p.valor as string[] }
+              : p.campo === 'nome'
+                ? { nome: p.valor as string }
+                : { [p.campo]: p.valor as string | null };
+        await this.repo.atualizarCliente(p.clienteId, patch);
+        return [{ texto: `${resumo}\n\n✅ <b>Atualizado</b>`, editarOriginal: true }];
+      }
       case 'cliente': {
         const novo = await this.repo.criarCliente(p.dados);
         await this.lembrarCliente(sessao.telegramUserId, novo);
@@ -778,6 +830,12 @@ export class Aplicacao {
         const { parcelaId } = payload as { parcelaId: string };
         return this.planejarAdiamento(userId, parcelaId, data, `Adiar para ${texto}`);
       }
+      case 'aguardando_cliente_editar':
+        return this.iniciarEdicao(userId, texto.trim(), null, null);
+      case 'aguardando_valor_edicao': {
+        const { clienteId, campo } = payload as { clienteId: string; campo: CampoCliente };
+        return this.planejarEdicao(userId, clienteId, campo, texto);
+      }
       case 'aguardando_documento': {
         const c = payload as CadastroPendente;
         const doc = parseDocumento(texto);
@@ -807,8 +865,6 @@ export class Aplicacao {
     const escolhido = p.opcoes[Number(escolha)];
     const cliente = escolhido && (await this.repo.cliente(escolhido.id));
     if (!cliente) return [];
-    // Aprende: o nome digitado vira apelido do cliente escolhido.
-    await this.repo.adicionarApelido(cliente.id, p.nomeDigitado);
     const r = await this.continuarComCliente(userId, p.intencao, p.texto, cliente);
     return [{ texto: `👤 ${escapar(cliente.nome)}`, editarOriginal: true }, ...r];
   }
@@ -858,6 +914,133 @@ export class Aplicacao {
   private async planejarAdiamento(userId: number, parcelaId: string, data: DataISO, texto: string): Promise<Resposta[]> {
     const plano = await planejarRenegociacao(this.repo, { parcelaId, novoVencimento: data });
     return this.pedirConfirmacao(userId, { acao: 'renegociacao', plano, intencao: null, texto });
+  }
+
+  // ─────────────────────────── edição de cliente ───────────────────────────
+
+  /**
+   * /editar [cliente]: encontra o cliente (nome, apelido ou documento) e abre o menu de campos.
+   * Com campo e valor já ditos ("renomeia o joao para Vânia"), vai direto para a confirmação.
+   */
+  private async iniciarEdicao(userId: number, termo: string | null, campo: CampoCliente | null, valor: string | null): Promise<Resposta[]> {
+    if (!termo) {
+      await this.repo.criarSessao(userId, 'aguardando_cliente_editar', {});
+      return [{ texto: '✏️ Qual cliente você quer editar? (nome ou documento)' }];
+    }
+    const doc = /\d{3}/.test(termo) ? parseDocumento(termo) : null;
+    const porDoc = doc && !('erro' in doc) ? await this.repo.clientePorDocumento(doc) : null;
+    let cliente: ClienteRow | null = porDoc;
+    if (!cliente) {
+      const res = resolverCliente(termo, await this.repo.listarClientes());
+      if (res.tipo === 'unico') cliente = res.cliente;
+      else {
+        const opcoes = res.tipo === 'ambiguo' ? res.opcoes : (await this.repo.buscarClientes(termo, 5)).filter((c) => c.similaridade >= 0.25);
+        if (opcoes.length === 0) return [{ texto: `Não encontrei <b>${escapar(termo)}</b>. Veja /clientes.` }];
+        const sid = await this.repo.criarSessao(userId, 'escolher_cliente_editar', { ids: opcoes.map((o) => o.id), campo, valor });
+        return [
+          {
+            texto: `✏️ Qual <b>${escapar(termo)}</b>?`,
+            teclado: [...opcoes.map((o, i) => [{ texto: rotuloCliente(o), dados: `ee:${sid}:${i}` }]), [{ texto: '❌ Cancelar', dados: `x:${sid}` }]],
+          },
+        ];
+      }
+    }
+    if (campo && valor) return this.planejarEdicao(userId, cliente.id, campo, valor);
+    if (campo) return this.pedirValorEdicao(userId, cliente.id, campo);
+    return this.menuEdicao(cliente.id);
+  }
+
+  private async escolherClienteEdicao(userId: number, sid: string, i: number): Promise<Resposta[]> {
+    const s = await this.repo.obterSessao(sid);
+    if (!s || !(await this.repo.consumirSessao(sid))) return [{ texto: '⌛ Esta pergunta expirou.', editarOriginal: true }];
+    const p = s.payload as { ids: string[]; campo: CampoCliente | null; valor: string | null };
+    const id = p.ids[i];
+    if (!id) return [];
+    if (p.campo && p.valor) return this.planejarEdicao(userId, id, p.campo, p.valor);
+    if (p.campo) return this.pedirValorEdicao(userId, id, p.campo);
+    return this.menuEdicao(id, true);
+  }
+
+  /** Ficha do cadastro com um botão por campo editável. */
+  private async menuEdicao(clienteId: string, editarOriginal = false): Promise<Resposta[]> {
+    const c = await this.repo.cliente(clienteId);
+    if (!c) return [{ texto: 'Cliente não encontrado.' }];
+    const linhas = [
+      `✏️ <b>Editar cadastro</b>`,
+      `Nome: <b>${escapar(c.nome)}</b>`,
+      `Documento: ${formatarDocumento(c.documento_tipo, c.documento)}`,
+      `Apelidos: ${c.apelidos.length ? escapar(c.apelidos.join(', ')) : '—'}`,
+      `Telefone: ${escapar(c.telefone ?? '—')}`,
+      `Observações: ${escapar(c.observacoes ?? '—')}`,
+      '',
+      'O que você quer alterar?',
+    ];
+    const b = (campo: CampoCliente) => ({ texto: CAMPOS_CLIENTE[campo], dados: `ec:${c.id}:${campo}` });
+    return [
+      {
+        texto: linhas.join('\n'),
+        teclado: [[b('nome'), b('apelidos')], [b('telefone'), b('documento')], [b('observacoes')]],
+        ...(editarOriginal ? { editarOriginal: true } : {}),
+      },
+    ];
+  }
+
+  private async pedirValorEdicao(userId: number, clienteId: string, campo: CampoCliente): Promise<Resposta[]> {
+    if (!(campo in CAMPOS_CLIENTE)) return [];
+    const sid = await this.repo.criarSessao(userId, 'aguardando_valor_edicao', { clienteId, campo });
+    const dica: Record<CampoCliente, string> = {
+      nome: 'Envie o nome completo correto.',
+      apelidos: 'Envie os apelidos separados por vírgula (ex.: <code>Carlão, Carlinhos</code>), ou <code>nenhum</code> para apagar todos.',
+      telefone: 'Envie o telefone, ou <code>nenhum</code> para apagar.',
+      documento: AJUDA_DOCUMENTO,
+      observacoes: 'Envie a observação, ou <code>nenhuma</code> para apagar.',
+    };
+    return [{ texto: `✏️ <b>${CAMPOS_CLIENTE[campo]}</b>\n${dica[campo]}`, teclado: [[{ texto: '❌ Cancelar', dados: `x:${sid}` }]] }];
+  }
+
+  /** Valida o novo valor e pede confirmação mostrando antes → depois. */
+  private async planejarEdicao(userId: number, clienteId: string, campo: CampoCliente, bruto: string): Promise<Resposta[]> {
+    const c = await this.repo.cliente(clienteId);
+    if (!c) return [{ texto: 'Cliente não encontrado.' }];
+    const t = bruto.trim();
+    const vazio = /^(nenhum|nenhuma|-|apagar|limpar)$/i.test(t);
+    const erro = (msg: string) => this.pedirValorEdicao(userId, clienteId, campo).then((r) => [{ texto: `⚠️ ${msg}` }, ...r]);
+    let valor: string | string[] | Documento | null;
+    let antes: string;
+    let depois: string;
+    switch (campo) {
+      case 'nome':
+        if (!/^[\p{L}][\p{L}\s.'-]{1,80}$/u.test(t)) return erro('Nome inválido (só letras, de 2 a 80 caracteres).');
+        valor = t.replace(/\s+/g, ' ');
+        [antes, depois] = [c.nome, valor];
+        break;
+      case 'apelidos': {
+        const lista = vazio ? [] : [...new Set(t.split(',').map((a) => a.trim()).filter(Boolean))];
+        valor = lista;
+        [antes, depois] = [c.apelidos.join(', '), lista.join(', ')];
+        break;
+      }
+      case 'telefone':
+        if (!vazio && (t.replace(/\D/g, '').length < 8 || t.length > 30)) return erro('Telefone inválido.');
+        valor = vazio ? null : t;
+        [antes, depois] = [c.telefone ?? '', valor ?? ''];
+        break;
+      case 'observacoes':
+        valor = vazio ? null : t.slice(0, 500);
+        [antes, depois] = [c.observacoes ?? '', valor ?? ''];
+        break;
+      case 'documento': {
+        const doc = parseDocumento(t);
+        if ('erro' in doc) return erro(doc.erro);
+        const dono = await this.repo.clientePorDocumento(doc);
+        if (dono && dono.id !== c.id) return [{ texto: `⚠️ Este documento já é de <b>${escapar(dono.nome)}</b>. Nada foi alterado.` }];
+        valor = doc;
+        [antes, depois] = [formatarDocumento(c.documento_tipo, c.documento), formatarDocumento(doc.tipo, doc.numero)];
+        break;
+      }
+    }
+    if (antes === depois) return [{ texto: 'Nada mudou: o valor já é esse.' }];
+    return this.pedirConfirmacao(userId, { acao: 'editar_cliente', clienteId, clienteNome: c.nome, campo, antes, depois, valor, intencao: null, texto: `editar ${campo}: ${t}` });
   }
 
   // ─────────────────────────── consultas ───────────────────────────

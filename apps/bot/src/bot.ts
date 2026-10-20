@@ -11,7 +11,7 @@ export interface OpcoesAudio {
   baixar: (filePath: string) => Promise<Uint8Array>;
 }
 
-export const COMANDOS = ['start', 'ajuda', 'novo', 'pagar', 'hoje', 'semana', 'atrasados', 'clientes', 'cliente', 'resumo', 'canal'] as const;
+export const COMANDOS = ['start', 'ajuda', 'novo', 'pagar', 'hoje', 'semana', 'atrasados', 'clientes', 'cliente', 'editar', 'resumo', 'canal'] as const;
 
 /** Opções de envio (HTML + teclado inline, se houver). */
 export function opcoesEnvio(r: Resposta) {
@@ -139,6 +139,7 @@ export async function registrarComandos(bot: Bot): Promise<void> {
     { command: 'resumo', description: 'Visão geral da carteira' },
     { command: 'clientes', description: 'Lista de clientes (nome e documento)' },
     { command: 'cliente', description: 'Ficha de um cliente (nome ou documento)' },
+    { command: 'editar', description: 'Editar cadastro de um cliente' },
     { command: 'novo', description: 'Novo empréstimo (sem IA)' },
     { command: 'pagar', description: 'Registrar pagamento (sem IA)' },
     { command: 'canal', description: 'Canal de alertas (status/teste)' },

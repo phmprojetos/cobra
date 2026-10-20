@@ -88,6 +88,9 @@ export function intencaoRapida(texto: string): IntencaoParcial | null {
   if (/^((liste|listar|lista|mostre|mostrar|ver)( os| de| meus)? clientes|clientes|meus clientes|lista de clientes)$/.test(t)) {
     return { tipo: 'consultar', dados: { tipo: 'listar_clientes', cliente: null, data_inicio: null, data_fim: null } };
   }
+  if (/^(editar|editar cliente|corrigir cliente|alterar cliente)$/.test(t)) {
+    return { tipo: 'editar_cliente', dados: { cliente: '', campo: 'indefinido', valor: null } };
+  }
   if (/^(pagamento|registrar pagamento|recebi|recebimento|baixa)$/.test(t)) {
     return { tipo: 'registrar_pagamento', dados: { cliente: null, valor: null, data: null, forma: null } };
   }

@@ -43,6 +43,15 @@ describe.skipIf(!process.env.ANTHROPIC_API_KEY)(`parser com ${modelo}`, () => {
     expect(alvo.includes(filtro) || filtro.includes(alvo)).toBe(true);
   });
 
+  it.each([
+    ['renomeia o Carlos para Carlos Eduardo Souza', { cliente: 'Carlos Souza', campo: 'nome', valor: 'Carlos Eduardo Souza' }],
+    ['corrige o CPF da Ana para 529.982.247-25', { cliente: 'Ana Paula', campo: 'documento' }],
+    ['quero editar o cadastro do Marcos', { cliente: 'Marcos Silva', campo: 'indefinido', valor: null }],
+  ])('edição: %s', async (texto, esperado) => {
+    const r = await ia.interpretar(texto, ctx);
+    expect(r).toMatchObject({ tipo: 'editar_cliente', dados: esperado });
+  });
+
   it('falta valor: abre rascunho sem inventar números', async () => {
     const r = await ia.interpretar('emprestei pro Carlos', ctx);
     expect(r).toMatchObject({ tipo: 'criar_operacao', dados: { cliente: 'Carlos Souza', valor_emprestado: null, valor_total_receber: null } });

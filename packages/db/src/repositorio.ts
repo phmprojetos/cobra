@@ -148,6 +148,20 @@ export class Repositorio {
     return ok(res);
   }
 
+  /** Edita o cadastro (a trigger de auditoria guarda antes/depois em `eventos`). */
+  async atualizarCliente(
+    id: string,
+    patch: Partial<{ nome: string; apelidos: string[]; telefone: string | null; observacoes: string | null; documento: Documento }>,
+  ): Promise<ClienteRow> {
+    const { documento, ...resto } = patch;
+    const dados = { ...resto, ...(documento ? { documento_tipo: documento.tipo, documento: documento.numero } : {}) };
+    const res = await this.db.from('clientes').update(dados).eq('id', id).select('*').single();
+    if (res.error?.code === '23505') {
+      throw new ErroRegra('documento_duplicado', 'Já existe outro cliente com este documento.');
+    }
+    return ok(res);
+  }
+
   async clientePorDocumento(d: Documento): Promise<ClienteRow | null> {
     return okTalvez(
       await this.db.from('clientes').select('*').eq('documento_tipo', d.tipo).eq('documento', d.numero).maybeSingle(),

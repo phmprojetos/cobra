@@ -79,6 +79,7 @@ Nada é gravado sem você confirmar ✅.
 /atrasados — lista de atrasados
 /clientes <code>[filtro]</code> — lista com nome e documento
 /cliente <code>nome ou documento</code> — ficha do cliente
+/editar <code>[nome ou documento]</code> — corrigir nome, apelidos, telefone, documento
 /resumo — visão geral da carteira
 /canal — canal de alertas (status e teste)
 /ajuda — esta mensagem`;

@@ -51,6 +51,12 @@ class RepoMemoria {
     this.clientes.push(row);
     return row;
   }
+  async atualizarCliente(id: string, patch: Record<string, unknown>) {
+    const c = this.clientes.find((x) => x.id === id)!;
+    const { documento, ...resto } = patch as { documento?: Documento };
+    Object.assign(c, resto, documento ? { documento_tipo: documento.tipo, documento: documento.numero } : {});
+    return c;
+  }
   async adicionarApelido(id: string, apelido: string) {
     const c = this.clientes.find((x) => x.id === id);
     if (c && !c.apelidos.includes(apelido) && c.nome !== apelido) c.apelidos.push(apelido);
@@ -164,5 +170,78 @@ describe('conversa: tudo numa frase só vai direto ao resumo', () => {
     expect(textos(r)).toContain('Novo empréstimo');
     expect(textos(r)).toContain('juros R$ 400,00');
     expect(textos(r)).toMatch(/a\.m\./);
+  });
+});
+
+describe('documento repetido com outro nome e /editar', () => {
+  const repo = new RepoMemoria();
+  const ia = new IAFake({
+    'vania 68826079404': { tipo: 'criar_cliente', dados: { nome: 'Vania', apelidos: [], telefone: null, documento: '68826079404' } },
+    'renomeia o joao para Vânia Souza': { tipo: 'editar_cliente', dados: { cliente: 'joao', campo: 'nome', valor: 'Vânia Souza' } },
+  });
+  const app = new Aplicacao(repo as unknown as Repositorio, ia, { info: () => {}, error: (e) => console.error(e) });
+
+  it('o caso relatado: não vira apelido; oferece editar o cadastro', async () => {
+    await repo.criarCliente({ nome: 'joao', documento: { tipo: 'cpf', numero: '68826079404' } });
+    await app.mensagem(U, 'cadastro');
+    const r = await app.mensagem(U, 'vania 68826079404');
+    expect(textos(r)).toContain('688.260.794-04 já é de <b>joao</b>');
+    expect(textos(r)).toContain('Se o nome certo é "Vania"');
+    expect(botao(r, 'cd:')).toBeUndefined(); // cadastro: não há "usar" (o cliente já existe)
+    expect(botao(r, 'em:')!.texto).toBe('✏️ Editar cadastro');
+    expect(repo.clientes[0]!.apelidos).toEqual([]);
+
+    // Editar cadastro → Nome → "Vania" → confirmação antes/depois → atualizado
+    const menu = await app.callback(U, botao(r, 'em:')!.dados);
+    expect(textos(menu)).toContain('Editar cadastro');
+    const pede = await app.callback(U, botao(menu, 'ec:')!.dados); // primeiro botão: Nome
+    expect(textos(pede)).toContain('nome completo correto');
+    const conf = await app.mensagem(U, 'Vania');
+    expect(textos(conf)).toContain('Nome: joao → <b>Vania</b>');
+    const ok = await app.callback(U, botao(conf, 'ok:')!.dados);
+    expect(textos(ok)).toContain('Atualizado');
+    expect(repo.clientes[0]!.nome).toBe('Vania');
+  });
+
+  it('/editar por documento; apelidos e telefone; valores inválidos são re-perguntados', async () => {
+    const menu = await app.comando(U, 'editar', '688.260.794-04');
+    expect(textos(menu)).toContain('Nome: <b>Vania</b>');
+    const ap = await app.callback(U, `ec:${repo.clientes[0]!.id}:apelidos`);
+    expect(textos(ap)).toContain('separados por vírgula');
+    const c1 = await app.mensagem(U, 'Vaninha, Vani, Vaninha');
+    expect(textos(c1)).toContain('Apelidos: — → <b>Vaninha, Vani</b>');
+    await app.callback(U, botao(c1, 'ok:')!.dados);
+    expect(repo.clientes[0]!.apelidos).toEqual(['Vaninha', 'Vani']);
+
+    await app.callback(U, `ec:${repo.clientes[0]!.id}:telefone`);
+    const inval = await app.mensagem(U, '12');
+    expect(textos(inval)).toContain('Telefone inválido');
+    const c2 = await app.mensagem(U, '+55 81 99999-0000');
+    await app.callback(U, botao(c2, 'ok:')!.dados);
+    expect(repo.clientes[0]!.telefone).toBe('+55 81 99999-0000');
+
+    await app.callback(U, `ec:${repo.clientes[0]!.id}:apelidos`);
+    const c3 = await app.mensagem(U, 'nenhum');
+    await app.callback(U, botao(c3, 'ok:')!.dados);
+    expect(repo.clientes[0]!.apelidos).toEqual([]);
+  });
+
+  it('documento de outro cliente é recusado; mesmo valor não gera confirmação', async () => {
+    await repo.criarCliente({ nome: 'Pedro', documento: { tipo: 'cpf', numero: '11219819417' } });
+    await app.callback(U, `ec:${repo.clientes[0]!.id}:documento`);
+    expect(textos(await app.mensagem(U, '112.198.194-17'))).toContain('já é de <b>Pedro</b>');
+    await app.callback(U, `ec:${repo.clientes[0]!.id}:nome`);
+    expect(textos(await app.mensagem(U, 'Vania'))).toContain('Nada mudou');
+  });
+
+  it('em linguagem natural vai direto para a confirmação', async () => {
+    repo.clientes[0]!.nome = 'joao';
+    const r = await app.mensagem(U, 'renomeia o joao para Vânia Souza');
+    expect(textos(r)).toContain('Nome: joao → <b>Vânia Souza</b>');
+  });
+
+  it('"/editar" sem nome pergunta o cliente', async () => {
+    expect(textos(await app.comando(U, 'editar', ''))).toContain('Qual cliente você quer editar?');
+    expect(textos(await app.mensagem(U, 'Pedro'))).toContain('Editar cadastro');
   });
 });

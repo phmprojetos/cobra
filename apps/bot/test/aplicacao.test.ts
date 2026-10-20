@@ -118,7 +118,7 @@ describe.skipIf(!disponivel)('fluxos do bot (Supabase)', () => {
     expect(op.status).toBe('quitada');
   });
 
-  it('cliente ambíguo pergunta com botões e aprende o apelido', async () => {
+  it('cliente ambíguo pergunta com botões (sem criar apelido automático)', async () => {
     ia.respostas.set('ana pagou', () => ({ tipo: 'registrar_pagamento', dados: { cliente: `Q${suf}`, valor: 10, data: hoje, forma: null } }));
     const r = await app.mensagem(USER, 'ana pagou');
     expect(r[0]!.texto).toContain('Qual');
@@ -128,8 +128,8 @@ describe.skipIf(!disponivel)('fluxos do bot (Supabase)', () => {
     expect(rotulos.some((t) => t.startsWith('➕'))).toBe(false);
     const r2 = await app.callback(USER, botao(r, 'cl:'));
     expect(r2.map((x) => x.texto).join()).toContain('Não há parcelas em aberto');
-    // O termo digitado virou apelido do escolhido
-    expect((await repo.cliente(clientes[1]!))?.apelidos).toContain(`Q${suf}`);
+    // Escolher não altera o cadastro
+    expect((await repo.cliente(clientes[1]!))?.apelidos).toEqual([]);
   });
 
   it('cliente novo exige documento; documento repetido não duplica', async () => {
@@ -165,12 +165,14 @@ describe.skipIf(!disponivel)('fluxos do bot (Supabase)', () => {
     }
     const r5 = await app.mensagem(USER, cpf(5));
     expect(r5[0]!.texto).toContain(`já é de <b>${nomeNovo}</b>`);
+    expect(r5[0]!.texto).toContain('Editar cadastro');
     const r6 = await app.callback(USER, botao(r5, 'cd:'));
     expect(r6[1]!.texto).toContain('Novo empréstimo');
     await app.callback(USER, botao(r6, 'x:'));
     const docs = (await db.from('clientes').select('id').eq('documento', cpf(5))).data!;
     expect(docs).toHaveLength(1);
-    expect((await repo.cliente(novo.id))?.apelidos).toContain(`Zezinho ${suf}`);
+    // Nenhum apelido criado sem pedir
+    expect((await repo.cliente(novo.id))?.apelidos).toEqual([]);
   });
 
   it('editar: correção vai ao interpretador com o rascunho', async () => {
