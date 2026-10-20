@@ -91,8 +91,23 @@ export function textoCliente(c: CarteiraCompleta, clienteId: string, hoje: DataI
   return linhas.join('\n');
 }
 
-/** Lista de clientes: nome completo + documento, saldo e operações. Filtro por nome, apelido ou documento. */
-export function textoClientes(c: CarteiraCompleta, filtro: string | null, hoje: DataISO, f: Formatador, limite = 40): string {
+const ROTULO_DOCUMENTO: Record<string, string> = { cpf: 'CPF', cnpj: 'CNPJ', rg: 'RG', outro: 'Doc.' };
+
+/** "CPF 529.982.247-25", "CNPJ 11.222.333/0001-81", "RG 123456789". */
+function documentoRotulado(tipo: string | null, numero: string | null): string {
+  if (!tipo || !numero) return 'sem documento';
+  const rotulo = ROTULO_DOCUMENTO[tipo] ?? 'Doc.';
+  return `${rotulo} ${formatarDocumento(tipo, numero).replace(/^RG /, '')}`;
+}
+
+function textoContratos(total: number, emAberto: number): string {
+  if (total === 0) return 'nenhum contrato';
+  const base = `${total} contrato${total > 1 ? 's' : ''}`;
+  return emAberto ? `${base} · ${emAberto} em aberto` : `${base} · todos quitados`;
+}
+
+/** Lista enxuta de clientes: nome completo, documento e nº de contratos. Filtro por nome, apelido ou documento. */
+export function textoClientes(c: CarteiraCompleta, filtro: string | null, hoje: DataISO, limite = 40): string {
   const termo = filtro ? normalizarNome(filtro) : '';
   const digitos = filtro ? filtro.toUpperCase().replace(/[^A-Z0-9]/g, '') : '';
   const lista = [...c.clientes.values()]
@@ -108,18 +123,21 @@ export function textoClientes(c: CarteiraCompleta, filtro: string | null, hoje: 
   if (lista.length === 0) {
     return filtro ? `Nenhum cliente encontrado para <b>${escapar(filtro)}</b>.` : 'Nenhum cliente cadastrado ainda.';
   }
-  const linhas = lista.slice(0, limite).map((cl) => {
+  const blocos = lista.slice(0, limite).map((cl, i) => {
     const m = metricasCliente(c.carteira, cl.id, hoje);
-    const apelidos = cl.apelidos.length ? ` <i>(${escapar(cl.apelidos.join(', '))})</i>` : '';
-    const situacao = m.operacoesEmAberto ? `saldo ${f.dinheiro(m.saldoAtual)} · ${m.operacoesEmAberto} em aberto` : 'sem empréstimo em aberto';
-    return `• <b>${escapar(cl.nome)}</b>${apelidos}\n   ${formatarDocumento(cl.documento_tipo, cl.documento)} · ${situacao}`;
+    return [
+      `<b>${i + 1}. ${escapar(cl.nome)}</b>`,
+      `    🪪 ${documentoRotulado(cl.documento_tipo, cl.documento)}`,
+      `    📄 ${textoContratos(m.operacoes, m.operacoesEmAberto)}`,
+    ].join('\n');
   });
   return [
-    `👥 <b>Clientes</b>${filtro ? ` com "${escapar(filtro)}"` : ''} (${lista.length})`,
-    ...linhas,
-    ...(lista.length > limite ? [`… e mais ${lista.length - limite}. Filtre: /clientes <code>nome ou documento</code>`] : []),
+    `👥 <b>Clientes</b>${filtro ? ` com "${escapar(filtro)}"` : ''} · ${lista.length}`,
     '',
-    'Detalhes: /cliente <code>nome ou documento</code>',
+    blocos.join('\n\n'),
+    ...(lista.length > limite ? ['', `… e mais ${lista.length - limite}. Filtre: /clientes <code>nome ou documento</code>`] : []),
+    '',
+    'Ficha completa: /cliente <code>nome ou documento</code>',
   ].join('\n');
 }
 

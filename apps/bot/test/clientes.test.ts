@@ -1,9 +1,8 @@
-import { CONFIG_PADRAO, type CarteiraCompleta, type ClienteRow, type OperacaoRow, type ParcelaRow } from '@cobra/db';
+import { type CarteiraCompleta, type ClienteRow, type OperacaoRow, type ParcelaRow } from '@cobra/db';
 import { paraOperacao, paraParcela } from '@cobra/db';
 import { describe, expect, it } from 'vitest';
 import { intencaoRapida } from '../src/atalhos';
 import { textoClientes } from '../src/consultas';
-import { Formatador } from '../src/formatacao';
 
 const agora = '2026-10-20T00:00:00Z';
 const cli = (id: string, nome: string, tipo: ClienteRow['documento_tipo'], doc: string, apelidos: string[] = []): ClienteRow => ({
@@ -31,29 +30,28 @@ const carteira: CarteiraCompleta = {
   pagamentos: [],
   carteira: { operacoes: [paraOperacao(op)], parcelas: [paraParcela(par)], pagamentos: [] },
 };
-const f = new Formatador(CONFIG_PADRAO);
 const hoje = '2026-10-20';
 
 describe('lista de clientes', () => {
-  it('nome completo + documento, em ordem alfabética, com saldo', () => {
-    const t = textoClientes(carteira, null, hoje, f);
-    expect(t).toContain('👥 <b>Clientes</b> (3)');
-    const ordem = ['Ana Paula Silva', 'Beatriz Lima', 'Pedro Miquiles'].map((n) => t.indexOf(n));
-    expect(ordem).toEqual([...ordem].sort((a, b) => a - b));
-    expect(t).toContain('<b>Pedro Miquiles</b> <i>(Pedrão)</i>\n   112.198.194-17 · saldo R$ 1.300,00 · 1 em aberto');
-    expect(t).toContain('11.222.333/0001-81 · sem empréstimo em aberto');
-    expect(t).toContain('RG 123456789');
+  it('só nome completo, tipo + número do documento e nº de contratos, em ordem alfabética', () => {
+    const t = textoClientes(carteira, null, hoje);
+    expect(t).toContain('👥 <b>Clientes</b> · 3');
+    expect(t).toContain('<b>1. Ana Paula Silva</b>\n    🪪 CNPJ 11.222.333/0001-81\n    📄 nenhum contrato');
+    expect(t).toContain('<b>2. Beatriz Lima</b>\n    🪪 RG 123456789');
+    expect(t).toContain('<b>3. Pedro Miquiles</b>\n    🪪 CPF 112.198.194-17\n    📄 1 contrato · 1 em aberto');
+    expect(t).not.toContain('Pedrão');
+    expect(t).not.toContain('R$');
   });
   it('filtra por nome, apelido (sem acento) e pedaço do documento', () => {
-    expect(textoClientes(carteira, 'silva', hoje, f)).toContain('(1)');
-    expect(textoClientes(carteira, 'pedrao', hoje, f)).toContain('Pedro Miquiles');
-    expect(textoClientes(carteira, '112.198', hoje, f)).toContain('Pedro Miquiles');
-    expect(textoClientes(carteira, '0001-81', hoje, f)).toContain('Ana Paula Silva');
-    expect(textoClientes(carteira, 'zé', hoje, f)).toContain('Nenhum cliente encontrado');
+    expect(textoClientes(carteira, 'silva', hoje)).toContain('· 1');
+    expect(textoClientes(carteira, 'pedrao', hoje)).toContain('Pedro Miquiles');
+    expect(textoClientes(carteira, '112.198', hoje)).toContain('Pedro Miquiles');
+    expect(textoClientes(carteira, '0001-81', hoje)).toContain('Ana Paula Silva');
+    expect(textoClientes(carteira, 'zé', hoje)).toContain('Nenhum cliente encontrado');
   });
   it('limite e lista vazia', () => {
-    expect(textoClientes(carteira, null, hoje, f, 2)).toContain('… e mais 1');
-    expect(textoClientes({ ...carteira, clientes: new Map() }, null, hoje, f)).toContain('Nenhum cliente cadastrado');
+    expect(textoClientes(carteira, null, hoje, 2)).toContain('… e mais 1');
+    expect(textoClientes({ ...carteira, clientes: new Map() }, null, hoje)).toContain('Nenhum cliente cadastrado');
   });
 });
 

@@ -1362,7 +1362,7 @@ export class Aplicacao {
     const c = await this.repo.carregarCarteira();
     switch (d.tipo) {
       case 'listar_clientes':
-        return [{ texto: textoClientes(c, d.cliente, hoje, f) }];
+        return [{ texto: textoClientes(c, d.cliente, hoje) }];
       case 'atrasados':
         return [{ texto: textoAtrasados(c, hoje, f) }];
       case 'resumo':
