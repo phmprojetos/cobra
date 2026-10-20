@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { BarChart3, FileText, LayoutDashboard, Settings, Users } from 'lucide-react';
@@ -80,15 +81,16 @@ export function NavRodape() {
             return (
               <li key={i.href} className="flex justify-center">
                 <Link href={`${i.href}${sufixo}`} aria-current={on ? 'page' : undefined} className="-mt-6 flex flex-col items-center gap-1">
+                  {/* Botão central com o símbolo da marca (cobra) */}
                   <span
                     className={cn(
-                      'ring-background flex size-14 items-center justify-center rounded-full bg-gradient-to-br from-sky-500 to-indigo-600 text-white shadow-lg ring-4 transition-transform active:scale-95',
-                      on && 'shadow-indigo-500/40',
+                      'ring-background flex size-14 items-center justify-center overflow-hidden rounded-full bg-[#0a0a0b] shadow-lg ring-4 transition-transform active:scale-95',
+                      on && 'shadow-lime-500/30',
                     )}
                   >
-                    <i.icone className="size-6" aria-hidden />
+                    <Image src="/cobra.png" alt="" width={56} height={56} className="size-14 scale-110 object-cover" />
                   </span>
-                  <span className={cn('text-[11px] font-semibold', on ? 'text-indigo-600 dark:text-sky-400' : 'text-muted-foreground')}>{i.rotulo}</span>
+                  <span className={cn('text-[11px] font-semibold', on ? 'text-foreground' : 'text-muted-foreground')}>{i.rotulo}</span>
                 </Link>
               </li>
             );
@@ -103,7 +105,7 @@ export function NavRodape() {
                   on ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
                 )}
               >
-                <i.icone className={cn('size-5', on && 'text-indigo-600 dark:text-sky-400')} aria-hidden />
+                <i.icone className={cn('size-5', on && 'text-foreground')} aria-hidden />
                 {i.rotulo}
               </Link>
             </li>

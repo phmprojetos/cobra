@@ -8,8 +8,9 @@ export default async function Login({ searchParams }: PageProps<'/login'>) {
     <main className="flex min-h-dvh items-center justify-center p-4">
       <Card className="w-full max-w-sm">
         <CardHeader className="items-center text-center">
-          <Image src="/cobra.png" alt="Cobra" width={72} height={72} priority className="mx-auto mb-2 size-18 rounded-2xl shadow-md" />
-          <CardTitle>Cobra</CardTitle>
+          {/* Logo completo (cobra + nome), arte original em public/marca/cobra-logo.png */}
+          <Image src="/marca/cobra-logo.png" alt="Cobra" width={160} height={160} priority className="mx-auto mb-1 size-40 rounded-2xl shadow-md" />
+          <CardTitle className="sr-only">Cobra</CardTitle>
           <CardDescription>Entre com o link mágico enviado ao seu e-mail.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">

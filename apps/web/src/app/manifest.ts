@@ -8,8 +8,9 @@ export default function manifest(): MetadataRoute.Manifest {
     description: 'Gestão pessoal de empréstimos',
     start_url: '/',
     display: 'standalone',
-    background_color: '#0f172a',
-    theme_color: '#4f46e5',
+    // Mesmo preto do fundo do logo
+    background_color: '#0a0a0b',
+    theme_color: '#0a0a0b',
     lang: 'pt-BR',
     icons: [
       { src: '/marca/cobra-192.png', sizes: '192x192', type: 'image/png' },
