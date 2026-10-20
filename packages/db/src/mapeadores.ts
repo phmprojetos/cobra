@@ -95,7 +95,9 @@ export function montarConfiguracao(
     const v = m.get(k);
     return typeof v === 'string' && v ? v : e || d;
   };
-  const silencio = m.get('horario_silencio') as HorarioSilencio | null | undefined;
+  const silencioBruto = m.get('horario_silencio');
+  // Ausente = padrão; `false`/null = desligado.
+  const silencio = silencioBruto === undefined ? undefined : silencioBruto && typeof silencioBruto === 'object' ? (silencioBruto as HorarioSilencio) : null;
   const estrategia = m.get('estrategia_alocacao');
   // Valores inválidos (moeda/locale/timezone) nunca derrubam o sistema: caem no padrão.
   const valido = (fn: () => unknown) => {

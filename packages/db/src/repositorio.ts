@@ -129,9 +129,11 @@ export class Repositorio {
 
   // ───────────── carteira ─────────────
 
-  /** Carrega operações (exceto canceladas), parcelas e pagamentos. Volume de um usuário cabe em memória. */
+  /** Carrega operações (canceladas só por id), parcelas e pagamentos. Volume de um usuário cabe em memória. */
   async carregarCarteira(filtro: { clienteId?: string; operacaoId?: string } = {}): Promise<CarteiraCompleta> {
-    let qOps = this.db.from('operacoes').select('*').neq('status', 'cancelada');
+    let qOps = this.db.from('operacoes').select('*');
+    // Canceladas só entram quando a operação é pedida explicitamente (tela de detalhe).
+    if (!filtro.operacaoId) qOps = qOps.neq('status', 'cancelada');
     if (filtro.clienteId) qOps = qOps.eq('cliente_id', filtro.clienteId);
     if (filtro.operacaoId) qOps = qOps.eq('id', filtro.operacaoId);
     const operacoes = ok(await qOps.order('data_emprestimo', { ascending: false }));

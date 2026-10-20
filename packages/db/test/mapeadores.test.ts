@@ -12,7 +12,7 @@ describe('montarConfiguracao', () => {
       { chave: 'moeda', valor: '"BRL"' },
       { chave: 'timezone', valor: 'Marte/Base' },
       { chave: 'estrategia_alocacao', valor: 'juros_primeiro' },
-      { chave: 'horario_silencio', valor: null },
+      { chave: 'horario_silencio', valor: false },
     ]);
     expect(c).toMatchObject({ moeda: 'BRL', timezone: 'America/Sao_Paulo', estrategiaAlocacao: 'juros_primeiro', silencio: null });
   });
