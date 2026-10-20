@@ -1,6 +1,15 @@
 import { Bot, GrammyError, InlineKeyboard, type Context } from 'grammy';
 import type { Aplicacao, Log } from './aplicacao';
-import type { Resposta } from './formatacao';
+import { escapar, type Resposta } from './formatacao';
+import type { Transcritor } from './ia/transcricao';
+
+export interface OpcoesAudio {
+  transcritor: Transcritor | null;
+  /** Duração máxima aceita (segundos), para controlar custo. */
+  maxSegundos: number;
+  /** Baixa um arquivo do Telegram pelo file_path (injetável nos testes). */
+  baixar: (filePath: string) => Promise<Uint8Array>;
+}
 
 export const COMANDOS = ['start', 'ajuda', 'novo', 'pagar', 'hoje', 'semana', 'atrasados', 'cliente', 'resumo'] as const;
 
@@ -30,7 +39,7 @@ async function responder(ctx: Context, respostas: Resposta[], log: Log): Promise
   }
 }
 
-export function criarBot(token: string, app: Aplicacao, permitidos: readonly number[], log: Log): Bot {
+export function criarBot(token: string, app: Aplicacao, permitidos: readonly number[], log: Log, audio?: OpcoesAudio): Bot {
   const bot = new Bot(token);
   const whitelist = new Set(permitidos);
 
@@ -60,7 +69,38 @@ export function criarBot(token: string, app: Aplicacao, permitidos: readonly num
     await responder(ctx, await app.mensagem(ctx.from.id, ctx.message.text), log);
   });
 
-  bot.on('message', (ctx) => ctx.reply('Por enquanto só entendo mensagens de texto. 🙂'));
+  // Áudio: transcreve e segue o mesmo fluxo do texto (mostrando o que foi entendido).
+  bot.on(['message:voice', 'message:audio'], async (ctx) => {
+    const midia = ctx.message.voice ?? ctx.message.audio!;
+    if (!audio?.transcritor) {
+      await ctx.reply('🎙️ Áudio ainda não está ativado. Por enquanto, mande por texto. 🙂');
+      return;
+    }
+    if (midia.duration > audio.maxSegundos) {
+      await ctx.reply(`🎙️ Áudio muito longo (máx. ${audio.maxSegundos}s). Mande um mais curto ou por texto.`);
+      return;
+    }
+    await ctx.replyWithChatAction('typing').catch(() => {});
+    let texto: string | null = null;
+    try {
+      const arquivo = await ctx.getFile();
+      if (!arquivo.file_path) throw new Error('arquivo sem file_path');
+      const nome = arquivo.file_path.split('/').pop() ?? 'audio.ogg';
+      texto = await audio.transcritor.transcrever(await audio.baixar(arquivo.file_path), nome.endsWith('.oga') ? nome.replace(/\.oga$/, '.ogg') : nome);
+    } catch (err) {
+      log.error({ err }, 'falha na transcrição');
+      await ctx.reply('🎙️ Não consegui ouvir o áudio agora. Tenta de novo ou manda por texto.');
+      return;
+    }
+    if (!texto) {
+      await ctx.reply('🎙️ Não entendi nada no áudio. Pode repetir?');
+      return;
+    }
+    await ctx.reply(`🎙️ <i>${escapar(texto)}</i>`, { parse_mode: 'HTML' });
+    await responder(ctx, await app.mensagem(ctx.from.id, texto), log);
+  });
+
+  bot.on('message', (ctx) => ctx.reply('Por enquanto entendo texto e áudio. 🙂'));
 
   bot.on('callback_query:data', async (ctx) => {
     await ctx.answerCallbackQuery().catch(() => {});

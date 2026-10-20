@@ -33,6 +33,10 @@ const esquema = z.object({
     .default('true')
     .transform((s) => s !== 'false'),
   LOG_LEVEL: z.string().default('info'),
+  /** Transcrição de áudio (Groq/Whisper). Sem chave, áudio fica desativado. */
+  GROQ_API_KEY: z.string().default(''),
+  GROQ_MODELO_AUDIO: z.string().default('whisper-large-v3-turbo'),
+  AUDIO_MAX_SEGUNDOS: z.coerce.number().default(120),
 });
 
 export type ConfigBot = z.infer<typeof esquema>;

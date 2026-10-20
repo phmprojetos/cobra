@@ -7,6 +7,7 @@ import { Aplicacao, type Log } from './aplicacao';
 import { criarBot, opcoesEnvio, registrarComandos } from './bot';
 import { carregarConfig } from './config';
 import { InterpretadorClaude } from './ia/interpretador';
+import { TranscritorGroq } from './ia/transcricao';
 import { executarJobNotificacoes, type Enviar } from './notificacoes';
 
 const log: Log = {
@@ -25,7 +26,16 @@ const repo = new Repositorio(criarClienteServico(config.SUPABASE_URL, config.SUP
 });
 const ia = new InterpretadorClaude(new Anthropic({ apiKey: config.ANTHROPIC_API_KEY || null }), config.ANTHROPIC_MODEL);
 const app = new Aplicacao(repo, ia, log);
-const bot = criarBot(config.TELEGRAM_BOT_TOKEN, app, config.TELEGRAM_ALLOWED_USER_IDS, log);
+const bot = criarBot(config.TELEGRAM_BOT_TOKEN, app, config.TELEGRAM_ALLOWED_USER_IDS, log, {
+  transcritor: config.GROQ_API_KEY ? new TranscritorGroq(config.GROQ_API_KEY, config.GROQ_MODELO_AUDIO) : null,
+  maxSegundos: config.AUDIO_MAX_SEGUNDOS,
+  baixar: async (filePath) => {
+    const r = await fetch(`https://api.telegram.org/file/bot${config.TELEGRAM_BOT_TOKEN}/${filePath}`);
+    if (!r.ok) throw new Error(`download do áudio falhou: HTTP ${r.status}`);
+    return new Uint8Array(await r.arrayBuffer());
+  },
+});
+log.info({ audio: config.GROQ_API_KEY ? 'ativado' : 'desativado (sem GROQ_API_KEY)' }, 'transcrição de áudio');
 
 const enviar: Enviar = async (chatId, r) => {
   const m = await bot.api.sendMessage(chatId, r.texto, opcoesEnvio(r));
