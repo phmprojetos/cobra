@@ -9,6 +9,8 @@ await build({
   format: 'esm',
   outfile: 'dist/main.js',
   sourcemap: true,
+  // fetch/AbortController nativos no lugar dos polyfills do grammY (ver shims/).
+  alias: { 'node-fetch': './shims/node-fetch.js', 'abort-controller': './shims/abort-controller.js' },
   banner: {
     js: "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);",
   },

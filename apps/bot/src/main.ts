@@ -164,6 +164,7 @@ servidor.on('error', (err: NodeJS.ErrnoException) => {
 servidor.listen(config.PORT, () => log.info({ porta: config.PORT, modo: config.BOT_MODO }, 'servidor no ar'));
 // Carrega o username do bot (usado nos links dos alertas do canal) antes do primeiro job.
 await bot.init();
+log.info({ bot: bot.botInfo.username }, 'bot iniciado');
 await registrarComandos(bot).catch((err) => log.error({ err }, 'setMyCommands falhou'));
 
 if (config.BOT_MODO === 'webhook' && config.TELEGRAM_WEBHOOK_URL) {
