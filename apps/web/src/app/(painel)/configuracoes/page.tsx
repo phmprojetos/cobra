@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { Cabecalho } from '@/components/cabecalho';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { MODO_DEMO } from '@/lib/demo';
@@ -42,6 +43,9 @@ export default async function Configuracoes() {
               <p className="text-muted-foreground mt-3 text-xs">
                 Novos usuários são criados pelo administrador do sistema: <code>pnpm usuario:criar email</code>.
               </p>
+              <Link href="/redefinir-senha" className="mt-3 inline-block text-sm font-medium underline-offset-4 hover:underline">
+                Alterar minha senha
+              </Link>
             </CardContent>
           </Card>
         </div>

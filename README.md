@@ -42,7 +42,7 @@ cp .env.example .env   # preencha os valores
 |---|---|
 | `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Project Settings → API. A service role é **só do servidor** (bot). |
 | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Os mesmos URL e anon key, expostos ao painel |
-| `NEXT_PUBLIC_SITE_URL` | URL pública do painel (destino do magic link) |
+| `NEXT_PUBLIC_SITE_URL` | URL pública do painel (destino dos links de e-mail, ex.: redefinir senha) |
 | `TELEGRAM_BOT_TOKEN` | @BotFather |
 | `TELEGRAM_BOT_USERNAME` | Username do bot (sem @). Usado no link de vínculo do Telegram no painel. |
 | `TELEGRAM_WEBHOOK_SECRET` | `openssl rand -hex 32`. Validado no header `X-Telegram-Bot-Api-Secret-Token`. |
@@ -78,9 +78,18 @@ Cada **carteira** tem seus próprios clientes, empréstimos, regras de alerta e 
 pnpm usuario:criar ana@exemplo.com                        # carteira nova (nome = e-mail)
 pnpm usuario:criar ana@exemplo.com --nova "Carteira Ana"  # carteira nova com nome
 pnpm usuario:criar socio@exemplo.com --carteira Principal # entra numa carteira existente
+pnpm usuario:criar socio@exemplo.com --carteira Principal --redefinir-senha  # nova senha para quem já existe
 ```
 
-O usuário entra no painel pelo magic link e, em **Configurações → Telegram → Vincular meu Telegram**, gera um link de uso único (15 min) que libera o bot para o Telegram dele, já apontando para a carteira certa. O bot ignora quem não está vinculado (no privado, explica como vincular).
+**Recuperação de senha** ("Esqueci minha senha" no login): no Supabase, em **Authentication → Emails → Reset Password**, troque o link do modelo por
+
+```
+{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=recovery&next=/redefinir-senha
+```
+
+Assim o link funciona mesmo aberto em outro aparelho (o modelo padrão só funciona no mesmo navegador que pediu).
+
+O comando mostra uma **senha inicial** (ou use `--senha`). O usuário entra com e-mail e senha, troca a senha em **Configurações → Alterar minha senha** e, em **Configurações → Telegram → Vincular meu Telegram**, gera um link de uso único (15 min) que libera o bot para o Telegram dele, já apontando para a carteira certa. O bot ignora quem não está vinculado (no privado, explica como vincular).
 
 > O SMTP padrão do Supabase tem limite baixo de envios por hora. Para uso contínuo, configure um SMTP próprio em *Authentication → Emails*.
 
