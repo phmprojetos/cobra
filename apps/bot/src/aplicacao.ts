@@ -265,6 +265,9 @@ export class Aplicacao {
       const rapida = intencaoRapida(texto);
       if (rapida) return this.processar(userId, rapida, texto);
       const hoje = await this.repo.hoje();
+      // Formato curto do /novo sem a barra ("Adriana GPS 200 260 27/10"): sem IA, nome inteiro.
+      const curto = /^[\p{L}][\p{L}\s.'-]*\s\d/u.test(texto.trim()) ? parseNovo(texto, hoje) : null;
+      if (curto && !('erro' in curto)) return this.processar(userId, curto, texto);
       const clientes = await this.repo.listarClientes();
       const intencao = await this.ia.interpretar(texto, {
         hoje,

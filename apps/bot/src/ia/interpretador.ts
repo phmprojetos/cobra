@@ -30,7 +30,8 @@ Extração:
 - "em 4x semanais começando sexta" → numero_parcelas 4, periodicidade semanal, primeiro_vencimento = próxima sexta.
   Sem menção a parcelas → numero_parcelas null e periodicidade null (o sistema assume parcela única).
 - Cliente: use o nome exatamente como na lista quando o usuário usar nome, primeiro nome ou apelido de alguém da lista.
-  Se houver mais de um candidato ou não estiver na lista, devolva como digitado. Número de CPF/CNPJ/documento vai em "documento".
+  Se houver mais de um candidato ou não estiver na lista, devolva o nome COMPLETO como digitado, com todos os sobrenomes,
+  inclusive palavras em maiúsculas ou siglas ("Adriana GPS 200 260 27/10" → cliente "Adriana GPS"). Número de CPF/CNPJ/documento vai em "documento".
 - "cadastrar", "cadastro", "novo cliente" = criar_cliente. Corrigir/alterar/renomear um cliente que já existe = editar_cliente.
 - "pagou", "acertou", "mandou" = registrar_pagamento. "pagou só os juros"/"pagou o juros"/"renovou" = registrar_pagamento com so_juros true (valor null se não disse). "joga o vencimento", "adia", "prorroga" = prorrogar; "com mais 100" = acrescimo 100.
 - Perguntas ("quanto entra", "quem tá atrasado", "saldo da Ana") = consultar.

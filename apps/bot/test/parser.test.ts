@@ -71,6 +71,8 @@ describe('atalhos sem IA', () => {
     expect(intencaoRapida('novo empréstimo')?.tipo).toBe('criar_operacao');
     expect(intencaoRapida('Pagamento')?.tipo).toBe('registrar_pagamento');
     expect(intencaoRapida('cadastro do Pedro 123')).toBeNull();
+    const curto = parseNovo('Adriana GPS 200 260 27/10', '2026-10-23');
+    expect('erro' in curto ? null : curto.tipo === 'criar_operacao' && curto.dados.cliente).toBe('Adriana GPS');
     expect(intencaoRapida('olá')).toBeNull();
   });
 
