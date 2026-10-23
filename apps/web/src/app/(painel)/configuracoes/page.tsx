@@ -2,19 +2,14 @@ import Link from 'next/link';
 import { Cabecalho } from '@/components/cabecalho';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { MODO_DEMO } from '@/lib/demo';
-import { carregarPainel } from '@/lib/painel';
 import { sessaoPainel } from '@/lib/supabase/painel';
-import { FormGeral, FormRegra } from './formularios';
 import { VinculosTelegram, type Vinculo } from './telegram';
 
 export default async function Configuracoes() {
-  const { repo, config, carteira } = await carregarPainel();
-  const regras = await repo.regras();
-  const clientes = [...carteira.clientes.values()].filter((c) => c.ativo).map((c) => ({ id: c.id, nome: c.nome }));
   const acesso = MODO_DEMO ? null : await carregarAcesso();
   return (
     <>
-      <Cabecalho titulo="Configurações" subtitulo="Moeda, fuso, alocação de pagamentos e alertas do Telegram" />
+      <Cabecalho titulo="Configurações" subtitulo="Acesso ao bot do Telegram e usuários do painel" />
       {acesso && (
         <div className="grid gap-4 lg:grid-cols-2">
           <Card>
@@ -50,57 +45,6 @@ export default async function Configuracoes() {
           </Card>
         </div>
       )}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Geral</CardTitle>
-          <CardDescription>Valem para o painel e para o bot.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <FormGeral
-            moeda={config.moeda}
-            locale={config.locale}
-            timezone={config.timezone}
-            estrategia={config.estrategiaAlocacao}
-            silencio={config.silencio}
-          />
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Notificações no Telegram</CardTitle>
-          <CardDescription>
-            Avaliadas a cada 15 minutos. Cada alerta é enviado uma única vez.{' '}
-            {config.canalAlertas ? (
-              <>
-                Destino: canal <b>{config.canalAlertas.titulo}</b> (alertas agrupados).
-              </>
-            ) : (
-              <>Destino: seu chat privado. Para usar um canal, adicione o bot como administrador do canal (veja /canal no bot).</>
-            )}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="divide-y p-0">
-          {regras.map((r) => (
-            <FormRegra
-              key={r.id}
-              clientes={clientes}
-              regra={{
-                id: r.id,
-                tipo: r.tipo,
-                offset_dias: r.offset_dias,
-                horario: r.horario.slice(0, 5),
-                dia_semana: r.dia_semana,
-                ativo: r.ativo,
-                silenciar_clientes: r.silenciar_clientes,
-              }}
-            />
-          ))}
-          <FormRegra
-            clientes={clientes}
-            regra={{ id: null, tipo: 'atraso', offset_dias: 14, horario: '10:00', dia_semana: 1, ativo: true, silenciar_clientes: [] }}
-          />
-        </CardContent>
-      </Card>
     </>
   );
 }
