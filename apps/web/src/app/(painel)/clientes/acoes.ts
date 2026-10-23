@@ -21,13 +21,13 @@ export interface EstadoCliente {
 
 interface Dados {
   nome: string;
-  documento: Documento;
+  documento: Documento | null;
   telefone: string | null;
   apelidos: string[];
   observacoes: string | null;
 }
 
-/** Valida o formulário com as mesmas regras do bot (nome + documento obrigatórios). */
+/** Valida o formulário com as mesmas regras do bot (nome obrigatório; documento opcional, validado se informado). */
 function ler(form: FormData): { dados: Dados } | { estado: EstadoCliente } {
   const nome = String(form.get('nome') ?? '').trim().replace(/\s+/g, ' ');
   const tipo = String(form.get('tipo_documento') ?? 'auto');
@@ -38,10 +38,10 @@ function ler(form: FormData): { dados: Dados } | { estado: EstadoCliente } {
 
   const campos: EstadoCliente['campos'] = {};
   if (!/^[\p{L}][\p{L}\s.'-]{1,80}$/u.test(nome)) campos.nome = 'Informe o nome completo (só letras).';
-  const doc = numero ? parseDocumento(tipo === 'auto' ? numero : `${tipo} ${numero}`) : { erro: 'Informe o documento.' };
-  if ('erro' in doc) campos.documento = doc.erro.replace(/<[^>]+>/g, '');
+  const doc = numero ? parseDocumento(tipo === 'auto' ? numero : `${tipo} ${numero}`) : null;
+  if (doc && 'erro' in doc) campos.documento = doc.erro.replace(/<[^>]+>/g, '');
   if (telefone && !telefoneValido(telefone)) campos.telefone = 'Telefone incompleto: DDD + número, ex.: (11) 99999-9999.';
-  if (Object.keys(campos).length || 'erro' in doc) return { estado: { campos } };
+  if (Object.keys(campos).length || (doc && 'erro' in doc)) return { estado: { campos } };
   return { dados: { nome, documento: doc, telefone: telefone ? mascararTelefone(telefone) : null, apelidos, observacoes: observacoes || null } };
 }
 
@@ -60,7 +60,7 @@ async function processar(form: FormData): Promise<EstadoCliente> {
   const id = String(form.get('id') ?? '') || null;
   const repo = await repoPainel();
 
-  const dono = await repo.clientePorDocumento(dados.documento);
+  const dono = dados.documento && (await repo.clientePorDocumento(dados.documento));
   if (dono && dono.id !== id) return { existente: { id: dono.id, nome: dono.nome }, campos: { documento: 'Documento já cadastrado.' } };
 
   let destino: string;

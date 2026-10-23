@@ -136,10 +136,10 @@ export class Repositorio {
     return ok(await this.db.rpc('buscar_clientes', { p_termo: termo, p_limite: limite, p_carteira: this.carteiraId }));
   }
 
-  /** Cadastro exige nome + documento; o documento é único (chave contra duplicidade). */
+  /** Cadastro exige o nome; o documento é opcional e, quando informado, único (chave contra duplicidade). */
   async criarCliente(c: {
     nome: string;
-    documento: Documento;
+    documento: Documento | null;
     apelidos?: string[];
     telefone?: string | null;
     observacoes?: string | null;
@@ -149,8 +149,8 @@ export class Repositorio {
       .insert({
         carteira_id: this.carteiraId,
         nome: c.nome.trim(),
-        documento_tipo: c.documento.tipo,
-        documento: c.documento.numero,
+        documento_tipo: c.documento?.tipo ?? null,
+        documento: c.documento?.numero ?? null,
         apelidos: c.apelidos ?? [],
         telefone: c.telefone ?? null,
         observacoes: c.observacoes ?? null,
@@ -166,10 +166,11 @@ export class Repositorio {
   /** Edita o cadastro (a trigger de auditoria guarda antes/depois em `eventos`). */
   async atualizarCliente(
     id: string,
-    patch: Partial<{ nome: string; apelidos: string[]; telefone: string | null; observacoes: string | null; documento: Documento }>,
+    patch: Partial<{ nome: string; apelidos: string[]; telefone: string | null; observacoes: string | null; documento: Documento | null }>,
   ): Promise<ClienteRow> {
     const { documento, ...resto } = patch;
-    const dados = { ...resto, ...(documento ? { documento_tipo: documento.tipo, documento: documento.numero } : {}) };
+    // undefined = não mexe; null = remove o documento.
+    const dados = { ...resto, ...(documento !== undefined ? { documento_tipo: documento?.tipo ?? null, documento: documento?.numero ?? null } : {}) };
     const res = await this.db.from('clientes').update(dados).eq('carteira_id', this.carteiraId).eq('id', id).select('*').single();
     if (res.error?.code === '23505') {
       throw new ErroRegra('documento_duplicado', 'Já existe outro cliente com este documento.');

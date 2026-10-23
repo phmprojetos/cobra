@@ -106,7 +106,7 @@ export function FormularioCliente({ valores = {}, cancelarHref }: { valores?: Va
           </Campo>
         </div>
 
-        <Campo id="documento" rotulo="Documento" obrigatorio erro={e.documento} dica="CPF e CNPJ são validados. O documento identifica o cliente e evita cadastros duplicados.">
+        <Campo id="documento" rotulo="Documento" erro={e.documento} dica="Opcional. CPF e CNPJ são validados; quando informado, evita cadastros duplicados.">
           <div className="flex gap-2">
             <select
               name="tipo_documento"

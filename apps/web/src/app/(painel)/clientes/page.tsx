@@ -46,7 +46,7 @@ export default async function Clientes({ searchParams }: PageProps<'/clientes'>)
         </Button>
       </Cabecalho>
 
-      <Secao titulo="Carteira de clientes" descricao="Cadastre aqui ou pelo Telegram: nome e documento são obrigatórios." semPadding>
+      <Secao titulo="Carteira de clientes" descricao="Cadastre aqui ou pelo Telegram: só o nome é obrigatório." semPadding>
         {linhas.length === 0 ? (
           <Vazio icone={Users} titulo="Nenhum cliente encontrado" />
         ) : (

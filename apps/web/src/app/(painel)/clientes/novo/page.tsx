@@ -11,7 +11,7 @@ export default function NovoCliente() {
           <ArrowLeft className="size-4" /> Clientes
         </Link>
         <h1 className="text-2xl font-semibold tracking-tight">Novo cliente</h1>
-        <p className="text-muted-foreground text-sm">Nome e documento são obrigatórios. Empréstimos continuam sendo lançados pelo Telegram.</p>
+        <p className="text-muted-foreground text-sm">Só o nome é obrigatório. Empréstimos continuam sendo lançados pelo Telegram.</p>
       </div>
       <Secao titulo="Dados do cliente" className="max-w-3xl">
         <FormularioCliente cancelarHref="/clientes" />

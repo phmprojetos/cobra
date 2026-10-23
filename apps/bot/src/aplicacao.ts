@@ -74,7 +74,7 @@ type Pendente =
   | { acao: 'renegociacao'; plano: PlanoRenegociacao; intencao: Intencao | null; texto: string }
   | {
       acao: 'cliente';
-      dados: { nome: string; apelidos: string[]; telefone: string | null; documento: Documento };
+      dados: { nome: string; apelidos: string[]; telefone: string | null; documento: Documento | null };
       intencao: Intencao;
       texto: string;
     }
@@ -107,6 +107,9 @@ interface EscolhaCliente {
   nomeDigitado: string;
   opcoes: { id: string; nome: string }[];
 }
+
+/** Resposta "não tem documento" na pergunta do cadastro. */
+const SEM_DOCUMENTO = /^(sem( documento)?|n[aã]o tem|nenhum|pular|-)$/i;
 
 /** Aguardando o documento para cadastrar um cliente novo (e então seguir a intenção). */
 interface CadastroPendente {
@@ -365,6 +368,8 @@ export class Aplicacao {
           return this.editar(id);
         case 'cl':
           return this.escolherCliente(userId, id, extra ?? '');
+        case 'sd':
+          return this.cadastrarSemDocumento(userId, id);
         case 'cd':
           return this.confirmarMesmoCliente(userId, id);
         case 'uc':
@@ -580,7 +585,7 @@ export class Aplicacao {
 
   // ─────────────────────────── cadastro com documento ───────────────────────────
 
-  /** Pergunta o documento: nome + documento são obrigatórios e o documento evita duplicidade. */
+  /** Pergunta o documento (opcional): quando informado, evita cadastrar a mesma pessoa duas vezes. */
   private async pedirDocumento(userId: number, intencao: Intencao, texto: string, nome: string, erro: string | null): Promise<Resposta[]> {
     const payload: CadastroPendente = { intencao, texto, nome };
     const sid = await this.repo.criarSessao(userId, 'aguardando_documento', payload);
@@ -590,8 +595,9 @@ export class Aplicacao {
           ...(erro ? [`⚠️ ${erro}`] : []),
           `👤 Para cadastrar <b>${escapar(nome)}</b>, qual o documento?`,
           AJUDA_DOCUMENTO,
+          'Se não tiver, toque em <b>Cadastrar sem documento</b>.',
         ].join('\n'),
-        teclado: [[{ texto: '❌ Cancelar', dados: `x:${sid}` }]],
+        teclado: [[{ texto: '⏭️ Cadastrar sem documento', dados: `sd:${sid}` }], [{ texto: '❌ Cancelar', dados: `x:${sid}` }]],
       },
     ];
   }
@@ -600,13 +606,13 @@ export class Aplicacao {
    * Com o documento em mãos: se já existe cliente com ele, pergunta se é a mesma pessoa
    * (evita duplicar quando o nome veio diferente); senão cadastra e segue o lançamento.
    */
-  private async cadastrarComDocumento(userId: number, c: CadastroPendente, doc: Documento): Promise<Resposta[]> {
-    const existente = await this.repo.clientePorDocumento(doc);
+  private async cadastrarComDocumento(userId: number, c: CadastroPendente, doc: Documento | null): Promise<Resposta[]> {
+    const existente = doc && (await this.repo.clientePorDocumento(doc));
     if (existente) {
       const sid = await this.repo.criarSessao(userId, 'confirmar_documento', { ...c, existenteId: existente.id } satisfies CadastroPendente);
       return [
         {
-          texto: `🔎 ${formatarDocumento(doc.tipo, doc.numero)} já é de <b>${escapar(existente.nome)}</b>.${
+          texto: `🔎 ${formatarDocumento(doc!.tipo, doc!.numero)} já é de <b>${escapar(existente.nome)}</b>.${
             normalizarNome(existente.nome) !== normalizarNome(c.nome) ? `\nSe o nome certo é "${escapar(c.nome)}", corrija em ✏️ Editar cadastro.` : ''
           }`,
           teclado: [
@@ -628,7 +634,15 @@ export class Aplicacao {
     }
     const novo = await this.repo.criarCliente({ nome: c.nome, documento: doc });
     const r = await this.continuarComCliente(userId, c.intencao, c.texto, novo);
-    return [{ texto: `👤 <b>${escapar(novo.nome)}</b> cadastrado · ${formatarDocumento(doc.tipo, doc.numero)}` }, ...r];
+    return [{ texto: `👤 <b>${escapar(novo.nome)}</b> cadastrado${doc ? ` · ${formatarDocumento(doc.tipo, doc.numero)}` : ' (sem documento)'}` }, ...r];
+  }
+
+  private async cadastrarSemDocumento(userId: number, sessaoId: string): Promise<Resposta[]> {
+    const sessao = await this.repo.obterSessao(sessaoId);
+    if (!sessao || sessao.estado !== 'aguardando_documento' || !(await this.repo.consumirSessao(sessaoId))) {
+      return [{ texto: '⌛ Esta pergunta expirou. Envie a mensagem de novo.', editarOriginal: true }];
+    }
+    return this.cadastrarComDocumento(userId, sessao.payload as CadastroPendente, null);
   }
 
   private async confirmarMesmoCliente(userId: number, sessaoId: string): Promise<Resposta[]> {
@@ -795,7 +809,7 @@ export class Aplicacao {
         return [
           '👤 <b>Novo cliente</b>',
           `Nome: <b>${escapar(p.dados.nome)}</b>`,
-          `Documento: ${formatarDocumento(p.dados.documento.tipo, p.dados.documento.numero)}`,
+          `Documento: ${p.dados.documento ? formatarDocumento(p.dados.documento.tipo, p.dados.documento.numero) : '—'}`,
           ...(p.dados.apelidos.length ? [`Apelidos: ${escapar(p.dados.apelidos.join(', '))}`] : []),
           ...(p.dados.telefone ? [`Telefone: ${escapar(p.dados.telefone)}`] : []),
         ].join('\n');
@@ -844,7 +858,7 @@ export class Aplicacao {
       case 'editar_cliente': {
         const patch =
           p.campo === 'documento'
-            ? { documento: p.valor as Documento }
+            ? { documento: p.valor as Documento | null }
             : p.campo === 'apelidos'
               ? { apelidos: p.valor as string[] }
               : p.campo === 'nome'
@@ -930,6 +944,7 @@ export class Aplicacao {
       }
       case 'aguardando_documento': {
         const c = payload as CadastroPendente;
+        if (SEM_DOCUMENTO.test(texto.trim())) return this.cadastrarComDocumento(userId, c, null);
         const doc = parseDocumento(texto);
         if ('erro' in doc) return this.pedirDocumento(userId, c.intencao, c.texto, c.nome, doc.erro);
         return this.cadastrarComDocumento(userId, c, doc);
@@ -1296,7 +1311,7 @@ export class Aplicacao {
       nome: 'Envie o nome completo correto.',
       apelidos: 'Envie os apelidos separados por vírgula (ex.: <code>Carlão, Carlinhos</code>), ou <code>nenhum</code> para apagar todos.',
       telefone: 'Envie o telefone, ou <code>nenhum</code> para apagar.',
-      documento: AJUDA_DOCUMENTO,
+      documento: `${AJUDA_DOCUMENTO}\nOu <code>nenhum</code> para apagar.`,
       observacoes: 'Envie a observação, ou <code>nenhuma</code> para apagar.',
     };
     return [{ texto: `✏️ <b>${CAMPOS_CLIENTE[campo]}</b>\n${dica[campo]}`, teclado: [[{ texto: '❌ Cancelar', dados: `x:${sid}` }]] }];
@@ -1334,6 +1349,11 @@ export class Aplicacao {
         [antes, depois] = [c.observacoes ?? '', valor ?? ''];
         break;
       case 'documento': {
+        if (vazio || SEM_DOCUMENTO.test(t)) {
+          valor = null;
+          [antes, depois] = [formatarDocumento(c.documento_tipo, c.documento), '—'];
+          break;
+        }
         const doc = parseDocumento(t);
         if ('erro' in doc) return erro(doc.erro);
         const dono = await this.repo.clientePorDocumento(doc);
