@@ -1,7 +1,9 @@
 'use server';
 
+import { createClient } from '@supabase/supabase-js';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
+import { env } from '@/lib/env';
 import { supabaseServidor } from '@/lib/supabase/server';
 
 export interface EstadoLogin {
@@ -34,9 +36,13 @@ export async function entrar(_: EstadoLogin | null, form: FormData): Promise<Est
 export async function pedirRecuperacao(_: EstadoLogin | null, form: FormData): Promise<EstadoLogin> {
   const email = String(form.get('email') ?? '').trim().toLowerCase();
   if (!EMAIL.test(email)) return { ok: false, mensagem: 'E-mail inválido.' };
-  const supabase = await supabaseServidor();
+  // Fluxo implícito: o link do e-mail (modelo padrão do Supabase) traz a sessão e abre em qualquer
+  // aparelho. No PKCE ele só funcionaria no mesmo navegador que pediu.
+  const supabase = createClient(env.supabaseUrl, env.supabaseAnonKey, {
+    auth: { flowType: 'implicit', persistSession: false, autoRefreshToken: false },
+  });
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${await origem()}/auth/callback?next=/redefinir-senha`,
+    redirectTo: `${await origem()}/auth/confirmar?next=/redefinir-senha`,
   });
   if (error?.status === 429) return { ok: false, mensagem: 'Muitos pedidos. Aguarde alguns minutos e tente de novo.' };
   return { ok: true, mensagem: 'Se o e-mail tiver acesso, você vai receber um link para criar uma nova senha.' };

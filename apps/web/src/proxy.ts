@@ -1,12 +1,18 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
-const PUBLICAS = ['/login', '/auth/callback'];
+const PUBLICAS = ['/login', '/auth/'];
 
 /** Renova a sessão do Supabase e redireciona quem não está logado. */
 export async function proxy(request: NextRequest) {
   // Modo demonstração (dados fictícios, sem banco).
   if (process.env.DEMO === '1') return NextResponse.next({ request });
+  // Link de e-mail recusado pelo Supabase volta para o Site URL (/?error=…): mostra o motivo.
+  if (request.nextUrl.pathname === '/' && request.nextUrl.searchParams.has('error')) {
+    const url = request.nextUrl.clone();
+    url.pathname = '/auth/confirmar';
+    return NextResponse.redirect(url);
+  }
   let response = NextResponse.next({ request });
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

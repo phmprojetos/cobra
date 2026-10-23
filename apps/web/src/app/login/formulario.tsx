@@ -18,6 +18,11 @@ export function FormularioLogin() {
   const [emailSalvo, setEmailSalvo] = useState('');
 
   useEffect(() => {
+    // Sessão do link de e-mail que caiu aqui (Site URL → /login mantém o #fragmento).
+    if (/(^#|&)(access_token|error)=/.test(window.location.hash)) {
+      window.location.replace(`/auth/confirmar?next=/redefinir-senha${window.location.hash}`);
+      return;
+    }
     try {
       const salvo = localStorage.getItem(CHAVE_EMAIL);
       if (salvo && email.current && !email.current.value) {
