@@ -64,25 +64,36 @@ export const BOTOES_CONFIRMACAO = (sessaoId: string): Botao[][] => [
 ];
 
 export const TEXTO_AJUDA = `<b>Como usar</b>
-Escreva normalmente, por exemplo:
+Escreva do jeito que você falaria. Antes de gravar eu mostro um resumo: ✅ Confirmar, ✏️ Editar ou ❌ Cancelar.
+
+<b>💸 Empréstimo</b>
 • <i>emprestei 2000 pro Carlos, volta 2400 dia 15/12</i>
 • <i>Ana pegou 500, paga 600 em 4x semanais começando sexta</i>
+
+<b>✅ Pagamento</b>
 • <i>Carlos pagou 1200</i>
+• <i>Carlos pagou só os juros</i> (renova para o próximo mês)
+
+<b>📅 Prorrogar</b>
 • <i>joga o vencimento do Carlos pro dia 30 com mais 100</i>
-• <i>quanto entra essa semana?</i> · <i>quem tá atrasado?</i> · <i>saldo da Ana</i> · <i>liste os clientes</i>
 
-Nada é gravado sem você confirmar ✅.
+<b>👤 Clientes</b>
+• <i>cadastra a Maria, CPF 123.456.789-00</i>
+• <i>muda o telefone da Ana para 11 99999-9999</i>
 
-<b>Atalhos (sem IA)</b>
-/novo <code>nome valor total vencimento [4x] [semanal|quinzenal|mensal]</code>
-/pagar <code>nome valor [data]</code>
-/hoje — vencimentos de hoje e atrasados
+<b>🔎 Consultas</b>
+• <i>quanto entra essa semana?</i> · <i>quem tá atrasado?</i> · <i>saldo da Ana</i>
+
+<b>⚡ Atalhos</b>
+/hoje — vence hoje e atrasados
 /semana — a receber nesta semana
-/atrasados — lista de atrasados
-/clientes <code>[filtro]</code> — lista com nome e documento
-/pesquisa — buscar cliente por nome ou documento (ex.: <code>P</code>)
-/cliente <code>nome ou documento</code> — ficha do cliente
-/editar <code>[nome ou documento]</code> — corrigir nome, apelidos, telefone, documento
+/atrasados — quem está atrasado
 /resumo — visão geral da carteira
+/clientes <code>[filtro]</code> — lista de clientes
+/pesquisa — buscar por nome ou documento
+/cliente <code>nome ou documento</code> — ficha do cliente
+/editar <code>[cliente]</code> — nome, apelidos, telefone, documento, observações
+/pagar — registrar pagamento (sem nome, mostra quem deve)
+/novo — novo empréstimo, ex.: <code>/novo Carlos 2000 2400 15/12 4x semanal</code>
 /canal — canal de alertas (status e teste)
 /ajuda — esta mensagem`;
